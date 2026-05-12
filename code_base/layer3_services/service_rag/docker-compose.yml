@@ -1,0 +1,24 @@
+version: "3.9"
+
+# Standalone — run only the RAG (Pinecone) service:
+#   docker compose up --build
+
+services:
+  rag:
+    build: .
+    container_name: property_rag_pinecone
+    ports:
+      - "8001:8000"          # host:container
+    volumes:
+      # Mount your downloaded GGUF model file here:
+      - ../../../models:/app/models:ro
+    env_file:
+      - ../../../docker/secrets/rag.env
+      # - .env    # local dev .env (not used in Docker)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s   # allow time for model to load
+    restart: unless-stopped

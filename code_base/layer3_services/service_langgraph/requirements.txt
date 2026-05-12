@@ -1,0 +1,20 @@
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+pydantic==2.7.1
+
+# LangGraph + LangChain
+langgraph==0.1.9
+langchain==0.2.1
+langchain-community==0.2.1
+langchain-openai==0.1.8
+langchain-google-genai>=1.0.0
+langchain-ollama>=0.1.0
+
+# Local LLM fallback (Mistral 7B via llama-cpp-python)
+llama-cpp-python==0.2.77
+
+# HTTP calls to sibling EC2 services
+httpx==0.27.0
+
+# Utilities
+python-dotenv==1.0.1

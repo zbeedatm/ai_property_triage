@@ -1,0 +1,743 @@
+{
+  "name": "Property Triage Pipeline",
+  "nodes": [
+    {
+      "id": "node-1-webhook",
+      "name": "Node 1 \u2014 Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        100,
+        300
+      ],
+      "webhookId": "property-triage-webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "property-triage",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-2-guardrails-input",
+      "name": "Node 2 \u2014 Guardrails Input Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        340,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8003/check/input",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{ $json.body.description }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000,
+          "fullResponse": false
+        }
+      }
+    },
+    {
+      "id": "node-3-guardrails-router",
+      "name": "Node 3 \u2014 Pass / Reject Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        580,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.passed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-3b-reject-respond",
+      "name": "Node 3b \u2014 Reject Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        580,
+        500
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, rejected: true, reason: $('Node 2 \u2014 Guardrails Input Check').item.json.reason || 'Submission did not pass validation.' }) }}",
+        "options": {
+          "responseCode": 422
+        }
+      }
+    },
+    {
+      "id": "node-4-model",
+      "name": "Gemini Chat Model \u2014 Extractor",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        820,
+        500
+      ],
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {}
+      },
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "id": "node-4-extractor",
+      "name": "Node 4 \u2014 Information Extractor",
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1,
+      "position": [
+        820,
+        300
+      ],
+      "parameters": {
+        "text": "={{ $('Node 1 \u2014 Webhook Trigger').item.json.body.description }}",
+        "systemPromptTemplate": "You are a structured data extractor for a real estate platform.\n\nExtract the following fields from the property listing text.\nReturn ONLY a valid JSON object \u2014 no preamble, no markdown fences.\n\nRules:\n- Extract only what is explicitly stated \u2014 do not infer or invent.\n- For fields not mentioned, use null or [] as appropriate.\n- For price_ils: strip currency symbols and commas, return a plain number.\n\nListing text:\n{text}",
+        "attributes": {
+          "attributes": [
+            {
+              "name": "property_type",
+              "type": "string",
+              "description": "Property type: apartment, house, villa, office, retail, industrial, or other"
+            },
+            {
+              "name": "location",
+              "type": "string",
+              "description": "City or neighbourhood as stated in the listing"
+            },
+            {
+              "name": "price_ils",
+              "type": "number",
+              "description": "Asking price in ILS as a plain number, null if not mentioned"
+            },
+            {
+              "name": "num_rooms",
+              "type": "number",
+              "description": "Number of rooms as an integer, null if not mentioned"
+            },
+            {
+              "name": "key_features",
+              "type": "string",
+              "description": "Up to 5 notable property features as a comma-separated list"
+            },
+            {
+              "name": "certifications",
+              "type": "string",
+              "description": "Energy ratings or certifications as a comma-separated list, empty string if none"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-5-model",
+      "name": "Gemini Chat Model \u2014 Agent",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        120
+      ],
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {}
+      },
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "id": "node-5-ai-agent",
+      "name": "Node 5 \u2014 AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        300
+      ],
+      "parameters": {
+        "text": "={{ 'Listing description:\\n' + $('Node 1 \u2014 Webhook Trigger').item.json.body.description + '\\n\\nExtracted fields:\\n' + JSON.stringify($('Node 4 \u2014 Information Extractor').item.json) + '\\n\\nImage URLs:\\n' + JSON.stringify($('Node 1 \u2014 Webhook Trigger').item.json.body.image_urls || []) }}",
+        "promptType": "define",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "You are a senior property analyst working for a real estate triage platform.\n\nYou enrich property listings ONLY via the LangGraph backend. Do NOT call rag_query or analyse_images directly \u2014 LangGraph invokes RAG and the image service internally.\n\nTool:\n  langgraph_agent \u2014 Call exactly ONCE per run.\n    \u2022 description: the full listing text (same as \"Listing description\" in the user message).\n    \u2022 image_urls: a JSON array of image URL strings; use [] if none were provided.\n\nAfter langgraph_agent returns, build your answer from its JSON payload. Prefer the object's `report` field if present; otherwise use the payload as-is. Produce ONLY a JSON object matching the schema below (no markdown, no commentary).\n\n{\n  \"property_type\":    string,\n  \"routing_decision\": \"residential\" or \"commercial\",\n  \"location\":         string,\n  \"price_ils\":        number or null,\n  \"num_rooms\":        number or null,\n  \"key_features\":     [string],\n  \"image_scores\":     [{url, room_type, condition_score, confidence}],\n  \"similar_listings\": [string],\n  \"rag_insight\":      string,\n  \"enrichment_notes\": string,\n  \"confidence\":       number\n}\n\nRouting rules: residential = apartment/house/villa. commercial = office/retail/industrial.\nDo NOT invent data beyond the listing, extracted fields (in the user message), and LangGraph tool output.",
+          "maxIterations": 6,
+          "returnIntermediateSteps": false
+        }
+      }
+    },
+    {
+      "id": "node-5-tool-rag",
+      "name": "rag_query",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        520
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8001/query",
+        "sendBody": true,
+        "parametersBody": {
+          "values": [
+            {
+              "name": "description"
+            }
+          ]
+        },
+        "toolDescription": "Queries the RAG knowledge base for similar past property listings. Always call this first with the full listing description. The 'description' parameter should contain the property listing description text."
+      }
+    },
+    {
+      "id": "node-5-tool-image",
+      "name": "analyse_images",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        680
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8002/analyse",
+        "sendBody": true,
+        "parametersBody": {
+          "values": [
+            {
+              "name": "image_urls"
+            }
+          ]
+        },
+        "toolDescription": "Classifies room types and scores property condition from image URLs. Call this when image_urls is a non-empty array. Pass all URLs in one call. The 'image_urls' parameter should be a JSON array of image URL strings."
+      }
+    },
+    {
+      "id": "node-5-tool-langgraph",
+      "name": "langgraph_agent",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        840
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8004/agent/run",
+        "sendBody": true,
+        "parametersBody": {
+          "values": [
+            {
+              "name": "description"
+            },
+            {
+              "name": "image_urls"
+            }
+          ]
+        },
+        "toolDescription": "Runs a multi-step LangGraph agent for complex property analysis. Call only when rag_query and analyse_images alone are insufficient. The 'description' parameter is the listing text, 'image_urls' is a JSON array of image URLs."
+      }
+    },
+    {
+      "id": "node-6-model",
+      "name": "Gemini Chat Model \u2014 Report",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        120
+      ],
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {}
+      },
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "id": "node-6-llm-chain",
+      "name": "Node 6 \u2014 Final Report LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        300
+      ],
+      "parameters": {
+        "prompt": "You are a senior property analyst cleaning a property triage report.\n\nINPUT: The report may be plain JSON or wrapped in Markdown (```json ... ```). Extract the JSON object inside and KEEP the same factual values unless you fix types.\n\nANTI-HALLUCINATION (mandatory):\n- You are a JSON normalizer, not a researcher. Never substitute demo, tutorial, or \"typical\" property data (e.g. inventing Tel Aviv, round-number prices not in source, fake image URLs, Listing A/B placeholders) when the extracted JSON already has different values.\n- Copy verbatim from the extracted object: location, price_ils, num_rooms, key_features, image_scores, similar_listings, rag_insight, routing_decision (same meaning), enrichment_notes, and the confidence number.\n- Allowed edits only: repair invalid JSON syntax, coerce strings like \"500000\" to numbers for price_ils/num_rooms, trim whitespace, fix property_type capitalization (apartment vs Apartment).\n- Do NOT replace \"residential\" or \"commercial\" with unrelated workflow labels (e.g. High Priority).\n- Do NOT fill empty [] arrays with invented features, images, or listings.\n- Do NOT rewrite rag_insight or enrichment_notes to remove stated errors (e.g. RAG failed) except for JSON string escaping.\n\nOUTPUT \u2014 YOUR REPLY MUST SATISFY THE STRUCTURED PARSER:\n- Output exactly ONE JSON object. No markdown. No ``` fences. No commentary before or after.\n- property_type, routing_decision, location, rag_insight, enrichment_notes: strings.\n- price_ils and num_rooms: JSON numbers OR null \u2014 never strings like \"500000\".\n- confidence: a JSON number (e.g. 0.7), not a string.\n- key_features, similar_listings: JSON arrays of strings (use [] if empty).\n- image_scores: JSON array (use [] if empty; items may be objects with url, room_type, condition_score, confidence).\n\nDo not invent facts. Do not turn real values into \"unknown\" unless the source field was missing or already unknown.\n\nOnly if there is NO JSON object in the input (pure conversational text), return placeholders: \"unknown\" for strings, null for numeric fields, [] for arrays, confidence 0.\n\nReport to clean:\n{{ $json.output }}"
+      }
+    },
+    {
+      "id": "node-6-output-parser",
+      "name": "Node 6b \u2014 JSON Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        480
+      ],
+      "parameters": {
+        "jsonSchema": "{\n  \"type\": \"object\",\n  \"additionalProperties\": true,\n  \"properties\": {\n    \"property_type\":    { \"type\": \"string\" },\n    \"routing_decision\": { \"type\": \"string\" },\n    \"location\":         { \"type\": \"string\" },\n    \"price_ils\":        { \"anyOf\": [ { \"type\": \"number\" }, { \"type\": \"null\" } ] },\n    \"num_rooms\":        { \"anyOf\": [ { \"type\": \"number\" }, { \"type\": \"null\" } ] },\n    \"key_features\":     { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n    \"image_scores\":     { \"type\": \"array\" },\n    \"similar_listings\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n    \"rag_insight\":      { \"type\": \"string\" },\n    \"enrichment_notes\": { \"type\": \"string\" },\n    \"confidence\":       { \"type\": \"number\" }\n  },\n  \"required\": [\n    \"property_type\",\n    \"routing_decision\",\n    \"location\",\n    \"key_features\",\n    \"image_scores\",\n    \"similar_listings\",\n    \"rag_insight\",\n    \"enrichment_notes\",\n    \"confidence\"\n  ]\n}"
+      }
+    },
+    {
+      "id": "node-7-guardrails-output",
+      "name": "Node 7 \u2014 Guardrails Output Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8003/check/output",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "report",
+              "value": "={{ JSON.stringify($json) }}"
+            },
+            {
+              "name": "original_listing",
+              "value": "={{ $('Node 1 \u2014 Webhook Trigger').item.json.body.description }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "node-7b-output-router",
+      "name": "Node 7b \u2014 Output Pass / Flag Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.passed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-7c-human-review",
+      "name": "Node 7c \u2014 Human Review Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1780,
+        500
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:9090/review",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "report",
+              "value": "={{ JSON.stringify($('Node 6 \u2014 Final Report LLM Chain').item.json) }}"
+            },
+            {
+              "name": "flag_reason",
+              "value": "={{ $('Node 7 \u2014 Guardrails Output Check').item.json.reason }}"
+            },
+            {
+              "name": "agent_name",
+              "value": "={{ $('Node 1 \u2014 Webhook Trigger').item.json.body.agent_name }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "node-8-property-router",
+      "name": "Node 8 \u2014 Property Type Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        2020,
+        300
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "residential",
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Node 6 \u2014 Final Report LLM Chain').item.json.routing_decision }}",
+                    "rightValue": "residential",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "commercial",
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Node 6 \u2014 Final Report LLM Chain').item.json.routing_decision }}",
+                    "rightValue": "commercial",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
+    },
+    {
+      "id": "node-8a-residential-respond",
+      "name": "Node 8a \u2014 Residential Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2260,
+        200
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, channel: 'residential', report: $('Node 6 \u2014 Final Report LLM Chain').item.json }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "node-8b-commercial-respond",
+      "name": "Node 8b \u2014 Commercial Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2260,
+        400
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, channel: 'commercial', report: $('Node 6 \u2014 Final Report LLM Chain').item.json }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Node 1 \u2014 Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Node 2 \u2014 Guardrails Input Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 2 \u2014 Guardrails Input Check": {
+      "main": [
+        [
+          {
+            "node": "Node 3 \u2014 Pass / Reject Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 3 \u2014 Pass / Reject Router": {
+      "main": [
+        [
+          {
+            "node": "Node 4 \u2014 Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 3b \u2014 Reject Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 4 \u2014 Information Extractor": {
+      "main": [
+        [
+          {
+            "node": "Node 5 \u2014 AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model \u2014 Extractor": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Node 4 \u2014 Information Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model \u2014 Agent": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Node 5 \u2014 AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 5 \u2014 AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Node 6 \u2014 Final Report LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "rag_query": {
+      "ai_tool": [
+        [
+          {
+            "node": "Node 5 \u2014 AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "analyse_images": {
+      "ai_tool": [
+        [
+          {
+            "node": "Node 5 \u2014 AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "langgraph_agent": {
+      "ai_tool": [
+        [
+          {
+            "node": "Node 5 \u2014 AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 6b \u2014 JSON Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Node 6 \u2014 Final Report LLM Chain",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model \u2014 Report": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Node 6 \u2014 Final Report LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 6 \u2014 Final Report LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Node 7 \u2014 Guardrails Output Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 7 \u2014 Guardrails Output Check": {
+      "main": [
+        [
+          {
+            "node": "Node 7b \u2014 Output Pass / Flag Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 7b \u2014 Output Pass / Flag Router": {
+      "main": [
+        [
+          {
+            "node": "Node 8 \u2014 Property Type Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 7c \u2014 Human Review Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Node 8 \u2014 Property Type Router": {
+      "main": [
+        [
+          {
+            "node": "Node 8a \u2014 Residential Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Node 8b \u2014 Commercial Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    "property-triage"
+  ],
+  "triggerCount": 0
+}

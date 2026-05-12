@@ -1,0 +1,27 @@
+# NeMo Guardrails — main configuration
+# This file is loaded by RailsConfig and drives both rail sets.
+
+models:
+  - type: main
+    engine: openai
+    model: gemini-1.5-flash
+
+instructions:
+  - type: general
+    content: |
+      You are a guardrails assistant for a real estate property triage platform.
+      Your only job is to classify inputs and audit outputs — you do not answer
+      real estate questions yourself.
+
+rails:
+  input:
+    flows:
+      - check input is property listing
+      - block prompt injection
+
+  output:
+    flows:
+      - audit output for fabrications
+
+# Colang files to load (relative to this config directory)
+colang_version: "1.0"

@@ -1,0 +1,27 @@
+# Environment files
+.env
+.env.local
+# Real compose env files (never commit); templates live in docker/examples/
+docker/secrets/
+
+# Python virtual environment
+.venv/
+venv/
+
+# Node.js dependencies
+node_modules/
+
+#Other folders
+mnt/
+models/
+images/
+
+# OS/system files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Compiled files
+__pycache__/

@@ -1,0 +1,43 @@
+version: "3.9"
+
+# Self-hosted n8n for local development.
+# For production use n8n Cloud (cloud.n8n.io) and skip this file.
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: property_n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=changeme      # change before going live
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678
+
+      # Service URLs — n8n container reaches host services via host.docker.internal
+      - RAG_URL=http://host.docker.internal:8001
+      - IMAGE_URL=http://host.docker.internal:8002
+      - GUARDRAILS_URL=http://host.docker.internal:8003
+      - LANGGRAPH_URL=http://host.docker.internal:8004
+
+      # Human review endpoint (replace with real Slack/webhook URL)
+      - HUMAN_REVIEW_WEBHOOK_URL=http://host.docker.internal:9000/review
+
+      # Execution settings
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
+      - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
+      - N8N_LOG_LEVEL=info
+
+    volumes:
+      - n8n_data:/home/node/.n8n          # persists credentials and flow history
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  n8n_data:

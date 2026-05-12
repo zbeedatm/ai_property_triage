@@ -1,0 +1,26 @@
+version: "3.9"
+
+# Standalone — run only the Image Analyser service:
+#   docker compose up --build
+
+services:
+  image_analyser:
+    build: .
+    container_name: property_image_analyser
+    ports:
+      - "8002:8000"          # host:container
+    volumes:
+      # Trained model checkpoint — produced by train.py
+      - ./checkpoints:/app/checkpoints
+      # Dataset (optional — only needed if running train.py inside the container)
+      - ./data:/app/data
+    env_file:
+      - ../../../docker/secrets/image.env
+      # - .env    # local dev .env (not used in Docker)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped

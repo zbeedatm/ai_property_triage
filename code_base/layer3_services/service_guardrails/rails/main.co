@@ -1,0 +1,46 @@
+# rails/main.co
+# Colang 1.0 rail definitions
+# ---------------------------------------------------------------------------
+# RAIL A — Input validation
+# Checks whether a submission is a genuine property listing.
+# ---------------------------------------------------------------------------
+
+define flow check input is property listing
+  user ...
+  $is_listing = execute check_is_property_listing
+  if not $is_listing
+    bot refuse not a listing
+    stop
+
+define bot refuse not a listing
+  "This submission does not appear to be a genuine property listing. Please provide a valid listing with details such as property type, location, size, and features."
+
+# ---------------------------------------------------------------------------
+# RAIL B — Prompt injection detection
+# Catches attempts to override instructions embedded in the listing text.
+# ---------------------------------------------------------------------------
+
+define flow block prompt injection
+  user ...
+  $is_injection = execute check_prompt_injection
+  if $is_injection
+    bot refuse prompt injection
+    stop
+
+define bot refuse prompt injection
+  "Your submission contains content that cannot be processed. Please submit a genuine property listing only."
+
+# ---------------------------------------------------------------------------
+# RAIL C — Output auditing
+# Flags AI-generated reports that contain fabricated facts.
+# ---------------------------------------------------------------------------
+
+define flow audit output for fabrications
+  bot ...
+  $has_fabrication = execute check_output_fabrication
+  if $has_fabrication
+    bot flag output for review
+    stop
+
+define bot flag output for review
+  "FLAGGED_FOR_REVIEW: This report has been held for human review because it may contain unverified claims. A reviewer will process it shortly."

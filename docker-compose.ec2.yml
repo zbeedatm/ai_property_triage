@@ -1,0 +1,148 @@
+version: "3.9"
+
+# ==========================================================================
+# EC2 deployment — pulls pre-built images from Docker Hub.
+#
+# Usage:
+#   docker compose -f docker-compose.ec2.yml up -d
+#
+# Prerequisites:
+#   1. Place your Mistral GGUF model in ./models/
+#   2. Place trained image model checkpoint in ./checkpoints/
+#   3. Copy ./docker/secrets/*.env (from templates in ./docker/examples/) and docker/flow.json
+#   4. After first run, open n8n at http://<EC2_IP>:5678 and create the
+#      Google Gemini credential used by the workflow nodes.
+#
+# Port map:
+#   5678  — n8n workflow engine
+#   7860  — Gradio WebUI
+#   8001  — RAG (Pinecone)
+#   8002  — Image Analyser
+#   8003  — Guardrails
+#   8004  — LangGraph Agent
+#  11434  — Ollama (local LLM)
+# ==========================================================================
+
+services:
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: property_n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=changeme
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_SECURE_COOKIE=false
+      - WEBHOOK_URL=http://localhost:5678
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - RAG_URL=http://rag:8000
+      - IMAGE_URL=http://image_analyser:8000
+      - GUARDRAILS_URL=http://guardrails:8000
+      - LANGGRAPH_URL=http://langgraph_agent:8000
+      - HUMAN_REVIEW_WEBHOOK_URL=http://host.docker.internal:9000/review
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
+      - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
+      - N8N_LOG_LEVEL=info
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./docker/flow.json:/home/node/flow.json:ro
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        if [ ! -f /home/node/.n8n/.workflow_imported ]; then
+          n8n import:workflow --input=/home/node/flow.json
+          n8n update:workflow --id=KTmqpo6jEYzPBoKR --active=true 2>/dev/null || true
+          touch /home/node/.n8n/.workflow_imported
+        fi
+        exec n8n
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: property_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./models:/models:ro
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        ollama serve &
+        sleep 5
+        if ! ollama list | grep -q mistral; then
+          ollama create mistral -f /dev/stdin <<'MODELFILE'
+        FROM /models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
+        MODELFILE
+        fi
+        wait
+    restart: unless-stopped
+
+  webui:
+    image: zbeedatm/property-triage-webui:latest
+    container_name: property_webui
+    ports:
+      - "7860:7860"
+    env_file:
+      - ./docker/secrets/webui.env
+    depends_on:
+      - n8n
+      - ollama
+    restart: unless-stopped
+
+  guardrails:
+    image: zbeedatm/property-triage-guardrails:latest
+    container_name: property_guardrails
+    ports:
+      - "8003:8000"
+    env_file:
+      - ./docker/secrets/guardrails.env
+    restart: unless-stopped
+
+  rag:
+    image: zbeedatm/property-triage-rag:latest
+    container_name: property_rag_pinecone
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./models:/app/models:ro
+    env_file:
+      - ./docker/secrets/rag.env
+    restart: unless-stopped
+
+  image_analyser:
+    image: zbeedatm/property-triage-image_analyser:latest
+    container_name: property_image_analyser
+    ports:
+      - "8002:8000"
+    env_file:
+      - ./docker/secrets/image.env
+    restart: unless-stopped
+
+  langgraph_agent:
+    image: zbeedatm/property-triage-langgraph_agent:latest
+    container_name: property_langgraph_agent
+    ports:
+      - "8004:8000"
+    env_file:
+      - ./docker/secrets/langgraph.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - rag
+      - image_analyser
+    restart: unless-stopped
+
+volumes:
+  n8n_data:
+  ollama_data:

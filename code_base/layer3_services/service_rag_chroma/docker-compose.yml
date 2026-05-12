@@ -1,0 +1,31 @@
+version: "3.9"
+
+# Standalone — run only the RAG (ChromaDB) service:
+#   docker compose up --build
+# NOTE: Only run ONE of service_rag or service_rag_chroma — both use port 8001.
+
+services:
+  rag:
+    build: .
+    container_name: property_rag
+    ports:
+      - "8001:8000"          # host:container
+    volumes:
+      # Mount your downloaded GGUF model file here:
+      - ../../../models:/app/models:ro
+      # ChromaDB persisted storage — survives container restarts:
+      - ./chroma_db:/app/chroma_db
+    env_file:
+      - .env                 # ChromaDB has no docker/ env file — uses local .env directly
+    environment:
+      - CHROMA_PATH=/app/chroma_db
+      - MODEL_PATH=/app/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
+      - EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+      - TOP_K=3
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s   # allow time for model to load
+    restart: unless-stopped

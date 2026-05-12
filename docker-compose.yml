@@ -1,0 +1,198 @@
+version: "3.9"
+
+# ==========================================================================
+# Root orchestrator — brings up all services with a single command:
+#   docker compose up --build
+#
+# Port map:
+#   5678  — n8n workflow engine
+#   7860  — Gradio WebUI
+#   8001  — RAG (Pinecone)
+#   8002  — Image Analyser
+#   8003  — Guardrails
+#   8004  — LangGraph Agent
+#  11434  — Ollama (local LLM)
+#
+# Real compose env files live in ./docker/secrets/ (gitignored). Templates with no
+# secrets are in ./docker/examples/*.env.example — copy each to ./docker/secrets/
+# with the matching name (e.g. rag.env). Service folders may still use .env for local dev.
+#
+# Prerequisites:
+#   1. Place your Mistral GGUF model in ./models/
+#   2. Train the image model:
+#        cd AI_Property_Triage/layer3_services/service_image
+#        python dataset.py && python train.py
+#   3. Copy docker/examples/*.env.example to docker/secrets/*.env and add API keys
+#   4. After first run, open n8n at http://localhost:5678 and create the
+#      Google Gemini credential used by the workflow nodes.
+# ==========================================================================
+
+services:
+
+  # ── n8n Workflow Engine ───────────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: property_n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=changeme      # change before going live
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678
+
+      # Allow workflows to read env vars via $env.VAR_NAME (blocked by default since n8n v2.0)
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+
+      # Service URLs — n8n reaches other containers via Docker network
+      - RAG_URL=http://rag:8000
+      - IMAGE_URL=http://image_analyser:8000
+      - GUARDRAILS_URL=http://guardrails:8000
+      - LANGGRAPH_URL=http://langgraph_agent:8000
+
+      # Human review endpoint (replace with real Slack/webhook URL)
+      - HUMAN_REVIEW_WEBHOOK_URL=http://host.docker.internal:9000/review
+
+      # Execution settings
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
+      - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
+      - N8N_LOG_LEVEL=info
+
+    volumes:
+      - n8n_data:/home/node/.n8n          # persists credentials and flow history
+      - ./docker/flow.json:/home/node/flow.json:ro
+
+    # Import workflow on first run only (marker file prevents re-import).
+    # After import, credentials must be configured manually in the n8n UI.
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        if [ ! -f /home/node/.n8n/.workflow_imported ]; then
+          n8n import:workflow --input=/home/node/flow.json
+          n8n update:workflow --id=KTmqpo6jEYzPBoKR --active=true 2>/dev/null || true
+          touch /home/node/.n8n/.workflow_imported
+        fi
+        exec n8n
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # ── Ollama (local LLM server for the chat assistant) ─────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: property_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./models:/models:ro
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        ollama serve &
+        sleep 5
+        if ! ollama list | grep -q mistral; then
+          ollama create mistral -f /dev/stdin <<'MODELFILE'
+        FROM /models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
+        MODELFILE
+        fi
+        wait
+    restart: unless-stopped
+
+  # ── Gradio WebUI ──────────────────────────────────────────────────────────
+  webui:
+    build: ./AI_Property_Triage/layer1_webui
+    container_name: property_webui
+    ports:
+      - "7860:7860"
+    env_file:
+      - ./docker/secrets/webui.env
+      # - ./AI_Property_Triage/layer1_webui/.env    # local dev .env (not used in Docker)
+    depends_on:
+      - n8n
+      - ollama
+    restart: unless-stopped
+
+  # ── Guardrails Service ────────────────────────────────────────────────────
+  guardrails:
+    build: ./AI_Property_Triage/layer3_services/service_guardrails
+    container_name: property_guardrails
+    ports:
+      - "8003:8000"
+    env_file:
+      - ./docker/secrets/guardrails.env
+      # - ./AI_Property_Triage/layer3_services/service_guardrails/.env    # local dev
+    restart: unless-stopped
+
+  # ── RAG Service (Pinecone) ────────────────────────────────────────────────
+  rag:
+    build: ./AI_Property_Triage/layer3_services/service_rag
+    container_name: property_rag_pinecone
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./models:/app/models:ro
+    env_file:
+      - ./docker/secrets/rag.env
+      # - ./AI_Property_Triage/layer3_services/service_rag/.env    # local dev
+    restart: unless-stopped
+
+  # ── RAG Service (ChromaDB) — NOT USED ─────────────────────────────────────
+  # Using Pinecone (service_rag) instead. Uncomment to switch to ChromaDB.
+  # IMPORTANT: only ONE of rag / rag_chroma should be active on port 8001.
+  #
+  # rag_chroma:
+  #   build: ./AI_Property_Triage/layer3_services/service_rag_chroma
+  #   container_name: property_rag_chroma
+  #   ports:
+  #     - "8001:8000"
+  #   volumes:
+  #     - ./models:/app/models:ro
+  #     - ./AI_Property_Triage/layer3_services/service_rag_chroma/chroma_db:/app/chroma_db
+  #   env_file:
+  #     - ./AI_Property_Triage/layer3_services/service_rag_chroma/.env
+  #   environment:
+  #     - CHROMA_PATH=/app/chroma_db
+  #     - MODEL_PATH=/app/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
+  #   restart: unless-stopped
+
+  # ── Image Analyser Service ────────────────────────────────────────────────
+  image_analyser:
+    build: ./AI_Property_Triage/layer3_services/service_image
+    container_name: property_image_analyser
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./AI_Property_Triage/layer3_services/service_image/checkpoints:/app/checkpoints
+      - ./AI_Property_Triage/layer3_services/service_image/data:/app/data
+    env_file:
+      - ./docker/secrets/image.env
+      # - ./AI_Property_Triage/layer3_services/service_image/.env    # local dev
+    restart: unless-stopped
+
+  # ── LangGraph Agent Service ───────────────────────────────────────────────
+  langgraph_agent:
+    build: ./AI_Property_Triage/layer3_services/service_langgraph
+    container_name: property_langgraph_agent
+    ports:
+      - "8004:8000"
+    env_file:
+      - ./docker/secrets/langgraph.env
+      # - ./AI_Property_Triage/layer3_services/service_langgraph/.env    # local dev
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - rag
+      - image_analyser
+    restart: unless-stopped
+
+volumes:
+  n8n_data:
+  ollama_data:

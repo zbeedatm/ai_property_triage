@@ -4,6 +4,8 @@ A multi-layer AI pipeline that accepts real estate listing submissions,
 validates them, retrieves similar past listings, analyses property images,
 and returns a structured triage report.
 
+**Prompts registry:** consolidated system prompts and classifier instructions (WebUI, n8n `flow.json`, Guardrails, RAG, LangGraph) live in [docs/PROMPTS.md](docs/PROMPTS.md).
+
 ---
 
 ## Architecture

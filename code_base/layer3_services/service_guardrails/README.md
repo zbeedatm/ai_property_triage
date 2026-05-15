@@ -34,8 +34,8 @@
   "original_listing": "3BR apartment in Tel Aviv..."
 }
 
-// Response — flagged
-{ "passed": false, "reason": "Report contains unverifiable or fabricated claims" }
+// Response — flagged (fabrication, implausible listing data called out by the model, or critical tool failure)
+{ "passed": false, "reason": "Output audit failed: fabricated/unverifiable claims, material doubt about submitted listing accuracy, or critical analysis steps did not complete — human review required." }
 
 // Response — clean
 { "passed": true, "reason": null }
@@ -62,13 +62,20 @@ cp .env.example .env
 # Edit .env and set OPENAI_API_KEY=sk-...
 ```
 
-### 2. Start the service
+### 2. Start the service (Docker)
 
 ```bash
 docker compose up --build
 ```
 
 Available at `http://localhost:8003`.
+
+### 2b. Run locally (uvicorn, no Docker)
+
+```bash
+pip install -r requirements.txt
+python -m uvicorn main:app --host 0.0.0.0 --port 8003
+```
 
 ### 3. Run the test suite
 

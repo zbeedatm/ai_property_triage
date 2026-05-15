@@ -13,8 +13,7 @@ services:
       - ../../docker/secrets/webui.env
       # - .env    # local dev .env (not used in Docker)
     environment:
-      # Override URLs to reach host services from inside the container
-      - OLLAMA_HOST=http://host.docker.internal:11434
+      # Override webhook when n8n runs on the host (not in the same compose stack)
       - N8N_WEBHOOK_URL=http://host.docker.internal:5678/webhook/property-triage
 
     extra_hosts:

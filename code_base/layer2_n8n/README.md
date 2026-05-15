@@ -12,7 +12,7 @@ Webhook → Guardrails Input → [reject?] → Extractor → AI Agent → LLM Ch
                                                           ├─ RAG Query       (8001)
                                                           ├─ Image Analyser  (8002)
                                                           └─ LangGraph Agent (8004)
-       → Guardrails Output → [flag?] → Human Review
+       → Guardrails Output → [flag?] → Human Review webhook (optional) → Respond pending review
                                     → Property Router → Residential respond
                                                       → Commercial respond
 ```
@@ -27,8 +27,10 @@ Webhook → Guardrails Input → [reject?] → Extractor → AI Agent → LLM Ch
 | 4 | Information Extractor | LangChain Extractor | Pulls structured fields from listing text |
 | 5 | AI Agent | LangChain Agent | Calls RAG, Image, and LangGraph tools |
 | 6 | Final Report LLM Chain | LLM Chain | Cleans and validates the agent JSON output |
-| 7 | Guardrails Output Check | HTTP Request | `POST /check/output` — audits for fabrications |
-| 7b | Output Router | IF | Routes flagged reports to human review |
+| 7 | Guardrails Output Check | HTTP Request | `POST /check/output` — audits report |
+| 7b | Output Router | IF | `passed` → property router; else → human-review path |
+| 7c | Human Review Webhook | HTTP Request | `POST` to `HUMAN_REVIEW_WEBHOOK_URL` + `/review` when URL is origin-only (`continueOnFail`) |
+| 7d | Respond human review pending | Respond to Webhook | Returns JSON for Web UI (`human_review_required`, draft `report`) |
 | 8 | Property Type Router | Switch | Splits residential vs commercial response paths |
 
 ---
@@ -61,7 +63,7 @@ HUMAN_REVIEW_WEBHOOK_URL = <your-slack-or-review-endpoint>
 
 ```bash
 cd layer2_n8n
-cp n8n.env.example .env
+cp .env.example .env
 # Edit .env: set service URLs, credentials
 
 docker compose up -d
@@ -76,6 +78,47 @@ curl -u admin:changeme \
   -d @flow.json
 ```
 
+### Option C — n8n on the host (`n8n start` / `npx n8n`)
+
+n8n must see **`N8N_BLOCK_ENV_ACCESS_IN_NODE=false`** or expressions like `$env.RAG_URL` are blocked (“access to env vars denied”). Docker Compose sets this for you; a plain local process does **not** unless you export it.
+
+**Layer 3 URLs:** `.env.example` uses **`host.docker.internal`** so **n8n-in-Docker** can reach services on your machine. If **n8n runs on the host**, that hostname usually causes **connection refused** to Node 2 / HTTP tools. The **`run-n8n-local`** scripts set **`http://127.0.0.1:PORT`** when your env is empty or still points at `host.docker.internal`, and rewrite `//localhost` → `//127.0.0.1` to avoid IPv6 `::1` quirks on Windows.
+
+**Windows (PowerShell)** — pick **one** of these:
+
+```powershell
+# A) From repo root (AI_Property_Triage) — easiest if you are not inside layer2_n8n:
+.\run-n8n-local.ps1
+```
+
+```powershell
+# B) From the Layer 2 folder (where the script file lives):
+cd code_base\layer2_n8n
+.\run-n8n-local.ps1
+```
+
+```powershell
+# C) From anywhere — full path (replace with your clone location):
+& "D:\path\to\AI_Property_Triage\code_base\layer2_n8n\run-n8n-local.ps1"
+```
+
+If you see **“running scripts is disabled”**: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` then run the script again.
+
+Or skip the script and run:
+
+`$env:N8N_BLOCK_ENV_ACCESS_IN_NODE='false'; n8n start`
+
+**macOS / Linux:**
+
+```bash
+chmod +x run-n8n-local.sh
+./run-n8n-local.sh
+```
+
+Or: `N8N_BLOCK_ENV_ACCESS_IN_NODE=false n8n start`
+
+**Editor vs execution:** Some n8n versions still show an error when **previewing** `$env` in the UI even when the flag is off. **Execute the node or full workflow** to confirm URLs resolve.
+
 ---
 
 ## Wiring the AI Agent tools (Node 5)
@@ -88,13 +131,15 @@ After importing the flow, Node 5 needs its three tool sub-nodes connected:
 
 | Tool name in agent | Node to link | URL env var | Description to enter |
 |---|---|---|---|
-| `rag_query` | Tool — RAG Query | `$env.RAG_URL/query` | Query the property knowledge base with the listing description |
-| `analyse_images` | Tool — Image Analyser | `$env.IMAGE_URL/analyse` | Classify room types and score condition from image URLs |
-| `langgraph_agent` | Tool — LangGraph Agent | `$env.LANGGRAPH_URL/agent/run` | Run multi-step agent analysis on the listing |
+| `rag_query` | Tool — RAG Query | `RAG_URL` + `/query` in flow | Query the property knowledge base with the listing description |
+| `analyse_images` | Tool — Image Analyser | `IMAGE_URL` + `/analyse` in flow | Classify room types and score condition from image URLs |
+| `langgraph_agent` | Tool — LangGraph Agent | `LANGGRAPH_URL` + `/agent/run` in flow | Run multi-step agent analysis on the listing |
 
 > **Note:** The `flow.json` includes these tool node definitions. n8n's import
 > may require you to re-link them manually depending on your n8n version.
 > The node parameters are all pre-filled in the JSON.
+>
+> **Expression syntax:** Layer 3 bases use `String($env...).trim().replace(/\/+$/, '').replace(/\s+/g, '') + '/…'`. Human review (Node 7c) trims/sanitizes then **appends `/review` only when the URL has no path** (origin only, e.g. `http://host:9090`); full webhook URLs (e.g. Slack) with a path are left unchanged.
 
 ---
 

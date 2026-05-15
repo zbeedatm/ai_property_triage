@@ -9,9 +9,9 @@ services:
     container_name: property_rag_pinecone
     ports:
       - "8001:8000"          # host:container
-    volumes:
-      # Mount your downloaded GGUF model file here:
-      - ../../../models:/app/models:ro
+    # Uncomment for RAG_LLM_BACKEND=llama_cpp + local GGUF:
+    # volumes:
+    #   - ../../../models:/app/models:ro
     env_file:
       - ../../../docker/secrets/rag.env
       # - .env    # local dev .env (not used in Docker)

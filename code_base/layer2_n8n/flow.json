@@ -21,7 +21,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://127.0.0.1:8003/check/input",
+        "url": "={{ String($env.GUARDRAILS_URL || 'http://127.0.0.1:8003').trim().replace(/\\/+$/, '').replace(/\\s+/g, '') + '/check/input' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -112,13 +112,7 @@
       "position": [
         -576,
         352
-      ],
-      "credentials": {
-        "googlePalmApi": {
-          "id": "YnWCIy0A6hgjb0K3",
-          "name": "Google Gemini(PaLM) Api account"
-        }
-      }
+      ]
     },
     {
       "parameters": {
@@ -157,13 +151,7 @@
       "position": [
         -224,
         352
-      ],
-      "credentials": {
-        "googlePalmApi": {
-          "id": "YnWCIy0A6hgjb0K3",
-          "name": "Google Gemini(PaLM) Api account"
-        }
-      }
+      ]
     },
     {
       "parameters": {
@@ -188,7 +176,7 @@
       "parameters": {
         "toolDescription": "Queries the RAG knowledge base for similar past property listings. Always call this first with the full listing description. The 'description' parameter should contain the property listing description text.",
         "method": "POST",
-        "url": "http://127.0.0.1:8001/query",
+        "url": "={{ String($env.RAG_URL || 'http://127.0.0.1:8001').trim().replace(/\\/+$/, '').replace(/\\s+/g, '') + '/query' }}",
         "sendBody": true,
         "parametersBody": {
           "values": [
@@ -211,7 +199,7 @@
       "parameters": {
         "toolDescription": "Classifies room types and scores property condition from image URLs. Call this when image_urls is a non-empty array. Pass all URLs in one call. The 'image_urls' parameter should be a JSON array of image URL strings.",
         "method": "POST",
-        "url": "http://127.0.0.1:8002/analyse",
+        "url": "={{ String($env.IMAGE_URL || 'http://127.0.0.1:8002').trim().replace(/\\/+$/, '').replace(/\\s+/g, '') + '/analyse' }}",
         "sendBody": true,
         "parametersBody": {
           "values": [
@@ -234,7 +222,7 @@
       "parameters": {
         "toolDescription": "Runs a multi-step LangGraph agent for complex property analysis. Call only when rag_query and analyse_images alone are insufficient. The 'description' parameter is the listing text, 'image_urls' is a JSON array of image URLs.",
         "method": "POST",
-        "url": "http://127.0.0.1:8004/agent/run",
+        "url": "={{ String($env.LANGGRAPH_URL || 'http://127.0.0.1:8004').trim().replace(/\\/+$/, '').replace(/\\s+/g, '') + '/agent/run' }}",
         "sendBody": true,
         "parametersBody": {
           "values": [
@@ -267,13 +255,7 @@
       "position": [
         0,
         528
-      ],
-      "credentials": {
-        "googlePalmApi": {
-          "id": "YnWCIy0A6hgjb0K3",
-          "name": "Google Gemini(PaLM) Api account"
-        }
-      }
+      ]
     },
     {
       "parameters": {
@@ -304,7 +286,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://127.0.0.1:8003/check/output",
+        "url": "={{ String($env.GUARDRAILS_URL || 'http://127.0.0.1:8003').trim().replace(/\\/+$/, '').replace(/\\s+/g, '') + '/check/output' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -377,7 +359,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://127.0.0.1:9090/review",
+        "url": "={{ String($env.HUMAN_REVIEW_WEBHOOK_URL || 'http://127.0.0.1:9090').trim().replace(/\\/+$/, '').replace(/\\s+/g, '') + '/review' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -414,6 +396,23 @@
       "typeVersion": 4.2,
       "position": [
         544,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, human_review_required: true, message: 'Automated output checks flagged this submission for human review before it can be released as a final triage result. The optional human-review webhook may not be configured yet - this response is returned to the Web UI instead.', flag_reason: $('Node 7 — Guardrails Output Check').item.json.reason || null, report: $('Node 6c — Parse report JSON').item.json }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "f8a91e2b-4c0d-4f1a-9e2b-1a2b3c4d5e6f",
+      "name": "Node 7d — Respond human review pending",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        752,
         384
       ]
     },
@@ -533,13 +532,7 @@
         352
       ],
       "id": "379cb27d-fee4-4da0-96d4-b5758b36dcba",
-      "name": "OpenAI Chat Model",
-      "credentials": {
-        "openAiApi": {
-          "id": "wHMumzOvJMeIcK8P",
-          "name": "OpenAi account"
-        }
-      }
+      "name": "OpenAI Chat Model"
     },
     {
       "parameters": {},
@@ -705,7 +698,7 @@
         ],
         [
           {
-            "node": "Node 7c — Human Review Webhook",
+            "node": "Node 7d — Respond human review pending",
             "type": "main",
             "index": 0
           }

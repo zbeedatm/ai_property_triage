@@ -4,7 +4,9 @@ RAGPipeline
 1. Embed the incoming description with a sentence-transformer model.
 2. Query Pinecone for the top-k most similar past listings.
 3. Inject retrieved context into a LangChain prompt.
-4. Generate a short insight with Mistral 7B via llama-cpp-python.
+4. Generate a short insight via:
+   - **Ollama** (default): Ollama Cloud or local `OLLAMA_HOST` + `OLLAMA_API_KEY` when using cloud.
+   - **llama_cpp** (legacy): Mistral 7B GGUF via llama-cpp-python (`RAG_LLM_BACKEND=llama_cpp`).
 """
 
 import logging
@@ -12,6 +14,7 @@ import os
 import threading
 from dataclasses import dataclass
 
+from ollama import Client as OllamaClient
 from pinecone import Pinecone
 from sentence_transformers import SentenceTransformer
 from langchain.prompts import PromptTemplate
@@ -74,7 +77,7 @@ class RAGPipeline:
     ):
         self.top_k = top_k
         self._llm_lock = threading.Lock()
-        self.skip_llm = os.getenv("SKIP_LLM", "false").lower() in ("1", "true", "yes")
+        self.llm_backend = os.getenv("RAG_LLM_BACKEND", "ollama").lower().strip()
 
         # --- Pinecone ---
         self.pc = Pinecone(api_key=pinecone_api_key)
@@ -86,11 +89,26 @@ class RAGPipeline:
         self.embed_model = SentenceTransformer(embedding_model)
         logger.info("Loaded embedding model: %s", embedding_model)
 
-        # --- Mistral 7B via llama-cpp-python (optional) ---
+        # --- Insight LLM: Ollama (default) or local GGUF ---
         self.llm = None
         self.chain = None
-        if self.skip_llm:
-            logger.info("SKIP_LLM=true — Mistral 7B will NOT be loaded. Retrieval-only mode.")
+        self.ollama_client: OllamaClient | None = None
+        self.ollama_model: str | None = None
+
+        if self.llm_backend == "ollama":
+            host = os.getenv("OLLAMA_HOST", "https://ollama.com").rstrip("/")
+            model = os.getenv("OLLAMA_MODEL", "gpt-oss:120b")
+            key = os.getenv("OLLAMA_API_KEY", "").strip()
+            if not key:
+                raise ValueError(
+                    "RAG_LLM_BACKEND=ollama requires OLLAMA_API_KEY in the environment "
+                    "(Docker Compose: set it in docker/secrets/rag.env; "
+                    "see docker/examples/rag.env.example for keys and comments)."
+                )
+            headers = {"Authorization": f"Bearer {key}"}
+            self.ollama_client = OllamaClient(host=host, headers=headers)
+            self.ollama_model = model
+            logger.info("RAG insight LLM: Ollama at %s model=%s", host, model)
         else:
             llama_threads = int(os.getenv("RAG_LLM_THREADS", "1"))
             self.llm = LlamaCpp(
@@ -103,7 +121,11 @@ class RAGPipeline:
                 verbose=False,
             )
             self.chain = LLMChain(llm=self.llm, prompt=RAG_PROMPT)
-            logger.info("Mistral 7B loaded from %s (n_threads=%d)", model_path, llama_threads)
+            logger.info(
+                "RAG insight LLM: llama.cpp from %s (n_threads=%d)",
+                model_path,
+                llama_threads,
+            )
 
     def vector_count(self) -> int:
         stats = self.index.describe_index_stats()
@@ -148,6 +170,24 @@ class RAGPipeline:
             )
         return "\n\n".join(parts)
 
+    def _insight_via_ollama(self, description: str, context: str) -> str:
+        assert self.ollama_client is not None and self.ollama_model is not None
+        prompt_text = RAG_PROMPT.format(description=description, context=context)
+        with self._llm_lock:
+            resp = self.ollama_client.chat(
+                model=self.ollama_model,
+                messages=[{"role": "user", "content": prompt_text}],
+                stream=False,
+                options={"temperature": 0.2},
+            )
+        if isinstance(resp, dict):
+            msg = resp.get("message") or {}
+            text = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "") or ""
+        else:
+            m = getattr(resp, "message", None)
+            text = (getattr(m, "content", None) or "") if m is not None else ""
+        return str(text).strip()
+
     def run(self, description: str) -> dict:
         """Full RAG pipeline — retrieve → generate → return structured result."""
         kb_count = self.vector_count()
@@ -163,12 +203,9 @@ class RAGPipeline:
 
         context = self._build_context(listings)
 
-        if self.skip_llm or self.chain is None:
-            insight = (
-                "Retrieval-only mode (SKIP_LLM=true). "
-                f"Retrieved {len(listings)} similar listing(s) from Pinecone."
-            )
-        else:
+        if self.ollama_client is not None:
+            insight = self._insight_via_ollama(description, context)
+        elif self.chain is not None:
             with self._llm_lock:
                 out = self.chain.invoke({"description": description, "context": context})
             if isinstance(out, dict):
@@ -178,6 +215,8 @@ class RAGPipeline:
             else:
                 insight = out or ""
             insight = str(insight).strip()
+        else:
+            insight = "Insight LLM is not configured."
 
         return {
             "similar_listings": [

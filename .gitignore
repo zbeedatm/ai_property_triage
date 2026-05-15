@@ -15,6 +15,7 @@ node_modules/
 mnt/
 models/
 images/
+code_base/layer1_webui/uploads/
 
 # OS/system files
 .DS_Store

@@ -1,6 +1,6 @@
 # Prompt Engineering Log — Ollama System Prompt
 **Surface:** WebUI — Real estate assistant grounding and refusal behaviour  
-**Component:** Local Ollama server (Llama 3 or Mistral)  
+**Component:** Ollama (Ollama Cloud or local server) — model set via `OLLAMA_MODEL`  
 **Required iterations:** 5 minimum
 
 ---

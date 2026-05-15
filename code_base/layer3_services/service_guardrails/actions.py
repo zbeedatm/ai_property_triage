@@ -169,21 +169,10 @@ The user message has two labeled sections in this order:
 1) ORIGINAL LISTING — plain text the end user submitted (may be short or missing).
 2) AI REPORT — JSON produced by your pipeline (may include rag_insight, enrichment_notes, image_scores, etc.).
 
-Decide whether the AI REPORT states as **verified fact** anything that is **not**
-supported by the original listing and is **not** clearly hedged — **except** as
-specified below for enrichment_notes.
+Answer **yes** if ANY of the following applies. "Yes" means the report must be
+**blocked** for human review — not only when the model lied.
 
-**enrichment_notes (lighter standard — product allows analyst tone):**
-- Do **not** treat this field alone as fabrication for positive wording,
-  references to municipal/tax/permit checks, or "verified"/"cross-referenced"
-  phrasing typical of narrative enrichment, unless it **contradicts** something
-  explicit in the original listing (same property facts: price, location, rooms,
-  key claims).
-- If enrichment_notes is empty or whitespace-only, answer **no** (clean) based
-  on this field alone.
-
-Answer **yes** (fabrication / serious unverifiable claim) primarily from **fields
-other than enrichment_notes**, including:
+**A — Fabrication / unverifiable firm claims (same as before):**
 - Legal/compliance/financial **guarantees** or certifications presented as firm
   fact in rag_insight or routing text without listing support (not mere opinion)
 - Guaranteed investment returns, yields, or exact future prices stated as assured
@@ -191,18 +180,39 @@ other than enrichment_notes**, including:
   the original listing
 - Invented mandatory disclosures or binding legal status outside enrichment_notes
 
-If the **only** concern is bullish or official-sounding language inside
-enrichment_notes and it does **not** contradict the listing, answer **no**.
+**B — Submitted listing data looks unreliable (answer yes even if hedged):**
+If the AI REPORT (including enrichment_notes, rag_insight, or analyst-style text)
+says or clearly implies that **core facts taken from the user's listing** are
+probably **wrong**, **mistyped**, **wrong currency**, **implausible for the stated
+location/market**, **data entry error**, or **must be verified before use** — answer **yes**.
+Examples: "price appears unusually low", "suggesting a potential data entry error",
+"different currency", "likely typo", "inconsistent with typical market rates"
+**when tied to the listing's own price/rooms/size/location combo**.
 
-Answer **no** (report is acceptable) if:
+Hedging ("may", "appears", "suggests", "potential") does **not** exempt category B.
+
+**C — Material tool failure (answer yes):**
+If the report states that **image analysis failed** (invalid URL, unreachable
+images, decode error, etc.) in a way that **blocks** visual/condition assessment
+**while** the listing or report still treats condition or image-based conclusions
+as if images were successfully analysed — answer **yes**.
+
+**enrichment_notes (lighter standard only for category A tone, not B):**
+- Do **not** treat bullish or official-sounding language in enrichment_notes alone
+  as fabrication under **A** unless it **contradicts** something explicit in the
+  original listing (same property facts: price, location, rooms, key claims).
+- Category **B** still applies to enrichment_notes when it questions listing accuracy.
+
+Answer **no** (report is acceptable) only if:
+- None of A, B, or C apply
 - Factual core fields align with the listing or the listing is silent on them
-- Text is clearly opinion or hedged ("may", "could", "appears", "suggests",
-  "approximately", "worth verifying", "not verified")
+- Normal market opinion or generic "consult a professional" without questioning
+  whether the **listing's own numbers** are wrong
 - rag_insight / routing language is analytical, not a guaranteed return
 - image_scores and similar_listings read as model or retrieval outputs, not ground truth
 
-When the original listing is empty or very sparse, rely mainly on glaring
-contradictions and hard guarantees elsewhere in the JSON — not enrichment_notes tone.
+When the original listing is empty or very sparse, rely mainly on A and C — for B,
+only answer yes if the report clearly ties implausibility to stated listing numbers.
 
-Answer with a single word: yes (fabrication detected) or no (report is clean).
+Answer with a single word: yes (block for human review) or no (report is clean).
 Do not explain your answer."""

@@ -2,7 +2,7 @@
 Guardrails Service
 ------------------
 POST /check/input   — validate that a submission is a genuine property listing
-POST /check/output  — audit an AI-generated report for fabricated facts
+POST /check/output  — audit an AI-generated report (fabrication, listing-data doubt, or failed tools)
 
 Both endpoints return a unified CheckResult schema so downstream callers
 (n8n nodes) have a consistent interface.
@@ -131,8 +131,9 @@ async def check_input(request: InputCheckRequest):
 @app.post("/check/output", response_model=CheckResult)
 async def check_output(request: OutputCheckRequest):
     """
-    Audits an AI-generated property report for fabricated or unverifiable claims.
-    Returns passed=True if the report is clean.
+    Audits an AI-generated property report. Returns passed=False when the report
+    should be held for human review: fabricated/unverifiable claims, explicit doubt
+    that user-submitted core facts (e.g. price) are accurate, or material tool failures.
     """
     if not request.report.strip():
         return CheckResult(passed=False, reason="Empty report")
@@ -145,18 +146,22 @@ async def check_output(request: OutputCheckRequest):
             + "\n\nAI REPORT:\n"
             + request.report.strip()
         )
-        has_fabrication = await _classify(_OUTPUT_AUDIT_PROMPT, audit_payload)
+        block_for_review = await _classify(_OUTPUT_AUDIT_PROMPT, audit_payload)
         logger.info(
-            "check_output_fabrication → %s | listing_len=%s output: %.80r",
-            has_fabrication,
+            "check_output_audit → %s | listing_len=%s output: %.80r",
+            block_for_review,
             len(listing),
             request.report,
         )
 
-        if has_fabrication:
+        if block_for_review:
             return CheckResult(
                 passed=False,
-                reason="Report contains unverifiable or fabricated claims.",
+                reason=(
+                    "Output audit failed: fabricated/unverifiable claims, "
+                    "material doubt about submitted listing accuracy, "
+                    "or critical analysis steps did not complete — human review required."
+                ),
             )
 
         return CheckResult(passed=True)

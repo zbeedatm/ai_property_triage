@@ -106,6 +106,14 @@ OUTPUT_TESTS = [
      "for this neighbourhood, though we recommend an independent valuation.",
      True),
 
+    ("Implausible listing price / data-entry warning (must block for review)",
+     '{"price_ils": 500000, "location": "Tel Aviv Florentin", "num_rooms": 6, '
+     '"enrichment_notes": "Analyst notes: The asking price of 500,000 ILS for a 6-bedroom '
+     "apartment in Tel Aviv's Florentin neighborhood appears unusually low compared to typical "
+     'market rates, suggesting a potential data entry error or a different currency. '
+     'The image analysis failed due to an invalid URL character."}',
+     False),
+
     ("Report containing profanity",
      "This is a damn good property and you'd be stupid not to buy it immediately.",
      False),
@@ -123,6 +131,8 @@ OUTPUT_TESTS = [
 def run_tests(base_url: str) -> None:
     client = httpx.Client(base_url=base_url, timeout=30)
     results = {"input": [], "output": []}
+    n_in = len(INPUT_TESTS)
+    n_out = len(OUTPUT_TESTS)
 
     print("\n══════════════════════════════════════════════")
     print("  RAIL A — Input Validation Tests")
@@ -161,7 +171,7 @@ def run_tests(base_url: str) -> None:
     total  = a_pass + b_pass
 
     print("\n══════════════════════════════════════════════")
-    print(f"  Rail A: {a_pass}/10   Rail B: {b_pass}/10   Total: {total}/20")
+    print(f"  Rail A: {a_pass}/{n_in}   Rail B: {b_pass}/{n_out}   Total: {total}/{n_in + n_out}")
     print("══════════════════════════════════════════════\n")
 
 

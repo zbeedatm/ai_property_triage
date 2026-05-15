@@ -1,3 +1,5 @@
+name: AI_Property_Triage
+
 version: "3.9"
 
 # ==========================================================================
@@ -7,10 +9,10 @@ version: "3.9"
 #   docker compose -f docker-compose.ec2.yml up -d
 #
 # Prerequisites:
-#   1. Place your Mistral GGUF model in ./models/
-#   2. Place trained image model checkpoint in ./checkpoints/
-#   3. Copy ./docker/secrets/*.env (from templates in ./docker/examples/) and docker/flow.json
-#   4. After first run, open n8n at http://<EC2_IP>:5678 and create the
+#   1. Place trained image model checkpoint in ./checkpoints/
+#   2. Copy ./docker/secrets/*.env (from templates in ./docker/examples/) and use code_base/layer2_n8n/flow.json for n8n.
+#      WebUI + RAG need OLLAMA_API_KEY for Ollama Cloud (https://ollama.com/settings/keys).
+#   3. After first run, open n8n at http://<EC2_IP>:5678 and create the
 #      Google Gemini credential used by the workflow nodes.
 #
 # Port map:
@@ -20,7 +22,6 @@ version: "3.9"
 #   8002  — Image Analyser
 #   8003  — Guardrails
 #   8004  — LangGraph Agent
-#  11434  — Ollama (local LLM)
 # ==========================================================================
 
 services:
@@ -44,14 +45,14 @@ services:
       - IMAGE_URL=http://image_analyser:8000
       - GUARDRAILS_URL=http://guardrails:8000
       - LANGGRAPH_URL=http://langgraph_agent:8000
-      - HUMAN_REVIEW_WEBHOOK_URL=http://host.docker.internal:9000/review
+      - HUMAN_REVIEW_WEBHOOK_URL=http://host.docker.internal:9090
       - EXECUTIONS_DATA_SAVE_ON_ERROR=all
       - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
       - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
       - N8N_LOG_LEVEL=info
     volumes:
       - n8n_data:/home/node/.n8n
-      - ./docker/flow.json:/home/node/flow.json:ro
+      - ./code_base/layer2_n8n/flow.json:/home/node/flow.json:ro
     entrypoint: /bin/sh
     command:
       - -c
@@ -66,28 +67,6 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: property_ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-      - ./models:/models:ro
-    entrypoint: /bin/sh
-    command:
-      - -c
-      - |
-        ollama serve &
-        sleep 5
-        if ! ollama list | grep -q mistral; then
-          ollama create mistral -f /dev/stdin <<'MODELFILE'
-        FROM /models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
-        MODELFILE
-        fi
-        wait
-    restart: unless-stopped
-
   webui:
     image: zbeedatm/property-triage-webui:latest
     container_name: property_webui
@@ -97,7 +76,6 @@ services:
       - ./docker/secrets/webui.env
     depends_on:
       - n8n
-      - ollama
     restart: unless-stopped
 
   guardrails:
@@ -114,8 +92,6 @@ services:
     container_name: property_rag_pinecone
     ports:
       - "8001:8000"
-    volumes:
-      - ./models:/app/models:ro
     env_file:
       - ./docker/secrets/rag.env
     restart: unless-stopped
@@ -145,4 +121,3 @@ services:
 
 volumes:
   n8n_data:
-  ollama_data:

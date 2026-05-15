@@ -1,7 +1,8 @@
 gradio==4.36.1
+gradio-client==1.0.1
 huggingface_hub==0.23.5
 jinja2==3.1.4
 httpx==0.27.0
 python-dotenv==1.0.1
-ollama==0.2.1          # official Ollama Python client
-pydantic==2.7.1
+ollama>=0.4.0,<1       # official client (supports Ollama Cloud + OLLAMA_API_KEY)
+pydantic>=2.9.0,<3

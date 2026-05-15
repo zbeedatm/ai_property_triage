@@ -4,6 +4,40 @@
 
 ---
 
+## Quick start (Docker)
+
+1. **GGUF model** — download into `../../../models` (repo root `models/`), e.g.:
+
+   ```bash
+   pip install huggingface_hub
+   huggingface-cli download TheBloke/Mistral-7B-Instruct-v0.2-GGUF \
+     mistral-7b-instruct-v0.2.Q4_K_M.gguf --local-dir ../../../models
+   ```
+
+2. **Seed ChromaDB** (once):
+
+   ```bash
+   docker compose run --rm rag python seed_chroma.py
+   ```
+
+3. **Start**
+
+   ```bash
+   docker compose up --build
+   ```
+
+4. **Test**
+
+   ```bash
+   curl -X POST http://localhost:8001/query \
+     -H "Content-Type: application/json" \
+     -d '{"description": "3-bedroom apartment, Tel Aviv, sea view, renovated kitchen"}'
+   ```
+
+**Local (no Docker):** see **Setup** below — `pip install -r requirements.txt`, `python seed_chroma.py`, then `python -m uvicorn main:app --host 0.0.0.0 --port 8001`.
+
+---
+
 ## Endpoint
 
 | Method | Path | Description |

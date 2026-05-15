@@ -10,7 +10,7 @@ and returns a structured triage report.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Layer 1 — WebUI  (Gradio + Ollama/Mistral)  port 7860      │
+│  Layer 1 — WebUI  (Gradio + Ollama Cloud/local)  port 7860 │
 │   Tab 1: Real estate chat assistant                         │
 │   Tab 2: Listing submission form → n8n webhook POST         │
 └────────────────────────┬────────────────────────────────────┘
@@ -29,7 +29,7 @@ and returns a structured triage report.
                          │ HTTP calls
 ┌────────────────────────▼────────────────────────────────────┐
 │  Layer 3 — EC2 Microservices (Docker, FastAPI)              │
-│   service_rag         port 8001  LangChain + Mistral GGUF   │
+│   service_rag         port 8001  Pinecone RAG + Ollama insight │
 │   service_image       port 8002  PyTorch ResNet-50          │
 │   service_guardrails  port 8003  NeMo Guardrails            │
 │   service_langgraph   port 8004  LangGraph StateGraph       │
@@ -44,7 +44,7 @@ and returns a structured triage report.
 project-root/
 ├── layer1_webui/
 │   ├── app.py                  Gradio UI (two tabs)
-│   ├── chat_client.py          Ollama wrapper + system prompt
+│   ├── chat_client.py          Ollama client + system prompt
 │   ├── webhook_client.py       n8n POST + report formatter
 │   ├── Dockerfile
 │   ├── docker-compose.yml
@@ -53,7 +53,7 @@ project-root/
 ├── layer2_n8n/
 │   ├── flow.json               Import this into n8n
 │   ├── docker-compose.yml      Self-host n8n locally
-│   ├── n8n.env.example         n8n environment variables
+│   ├── .env.example            n8n / compose environment template
 │   ├── test_pipeline.py        End-to-end webhook tests
 │   └── prompt_logs/
 │       ├── rag_prompt_log.md
@@ -65,7 +65,7 @@ project-root/
 └── layer3_ec2/
     ├── service_rag/
     │   ├── main.py             FastAPI POST /query
-    │   ├── rag_pipeline.py     LangChain + Mistral + ChromaDB
+    │   ├── rag_pipeline.py     Pinecone + embeddings + Ollama insight
     │   ├── seed_chroma.py      Populate DB with 20 listings
     │   ├── Dockerfile
     │   └── docker-compose.yml
@@ -105,7 +105,7 @@ project-root/
 |---------|------|-----------|
 | WebUI | 7860 | Gradio |
 | n8n | 5678 | n8n |
-| RAG | 8001 | FastAPI + LangChain + Mistral GGUF |
+| RAG | 8001 | FastAPI + Pinecone + Ollama (insight) |
 | Image Analyser | 8002 | FastAPI + PyTorch ResNet-50 |
 | Guardrails | 8003 | FastAPI + NeMo Guardrails |
 | LangGraph Agent | 8004 | FastAPI + LangGraph |
@@ -115,16 +115,16 @@ project-root/
 ## Full startup sequence
 
 ```bash
-# ── Step 1: Ollama (host machine) ───────────────────────────
-ollama pull mistral
-ollama serve
+# ── Step 1: Ollama (chat + RAG insights) ────────────────────
+# Recommended: Ollama Cloud — set OLLAMA_HOST=https://ollama.com,
+# OLLAMA_API_KEY, and OLLAMA_MODEL in docker/secrets/*.env (see docker/examples/).
+# Alternative: local Ollama — ollama pull <model> && ollama serve on port 11434.
 
-# ── Step 2: Layer 3 — EC2 services ──────────────────────────
+# ── Step 2: Layer 3 — services ──────────────────────────────
 
-# RAG — seed DB first, then start
-cd layer3_ec2/service_rag
-# Download GGUF model into ./models/ first (see service_rag/README.md)
-docker compose run --rm rag python seed_chroma.py
+# RAG — seed Pinecone once, then start (requires PINECONE_* and OLLAMA_* in .env)
+cd code_base/layer3_services/service_rag
+docker compose run --rm rag python seed_pinecone.py
 docker compose up -d
 
 # Image Analyser — generate mock data, train, then start
@@ -181,9 +181,9 @@ Complete 5 iterations minimum for each surface before final submission:
 
 ## EC2 deployment checklist
 
-- [ ] Launch EC2 (t3.medium minimum), install Docker
-- [ ] Clone repo, place GGUF model in `service_rag/models/`
-- [ ] `docker build` + `docker run` each Layer 3 service
+- [ ] Launch EC2 (instance sizing: see README_EC2.md), install Docker
+- [ ] Configure `docker/secrets/*.env` (Pinecone, Ollama Cloud `OLLAMA_API_KEY`, Gemini, etc.)
+- [ ] `docker compose` / `docker build` per deployment layout (see README_EC2.md)
 - [ ] Restrict security group: allow inbound 8001–8004 from n8n IP only
-- [ ] Update n8n env vars: swap `localhost` → EC2 public IP
+- [ ] Update n8n env vars: swap `localhost` → EC2 public IP where needed
 - [ ] Re-run `test_pipeline.py` against live webhook

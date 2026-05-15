@@ -18,14 +18,16 @@ services:
       - N8N_PROTOCOL=http
       - WEBHOOK_URL=http://localhost:5678
 
-      # Service URLs — n8n container reaches host services via host.docker.internal
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+
+      # Service URLs — base only; flow.json uses ($env.URL || default) + '/path'
       - RAG_URL=http://host.docker.internal:8001
       - IMAGE_URL=http://host.docker.internal:8002
       - GUARDRAILS_URL=http://host.docker.internal:8003
       - LANGGRAPH_URL=http://host.docker.internal:8004
 
       # Human review endpoint (replace with real Slack/webhook URL)
-      - HUMAN_REVIEW_WEBHOOK_URL=http://host.docker.internal:9000/review
+      - HUMAN_REVIEW_WEBHOOK_URL=http://host.docker.internal:9090
 
       # Execution settings
       - EXECUTIONS_DATA_SAVE_ON_ERROR=all

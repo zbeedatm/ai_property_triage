@@ -1,13 +1,28 @@
 # Layer 1 — WebUI
 
-**Stack:** Gradio · Ollama (Mistral 7B) · Python async
+**Stack:** Gradio · Ollama (cloud or local) · Python async
+
+---
+
+## Quick start
+
+**Ollama Cloud:** API key at [ollama.com/settings/keys](https://ollama.com/settings/keys) → in `.env` set `OLLAMA_HOST=https://ollama.com`, `OLLAMA_API_KEY`, `OLLAMA_MODEL` (e.g. `gpt-oss:120b`).
+
+**Local Ollama:** `ollama serve` → `OLLAMA_HOST=http://localhost:11434`, omit `OLLAMA_API_KEY`.
+
+| Mode | Commands |
+|------|----------|
+| **Local** | `cp .env.example .env` → edit → `pip install -r requirements.txt` → `python app.py` → http://localhost:7860 |
+| **Docker** | `docker compose up --build` (expects `../../docker/secrets/webui.env`; see `../../docker/examples/webui.env.example`) |
+
+Repo-root overview of the full stack: `../../README.md`.
 
 ---
 
 ## Two tabs
 
 ### Tab 1 — Chat Assistant
-Real estate Q&A powered by **Mistral 7B running locally** via Ollama.
+Real estate Q&A powered by **Ollama** (default: **Ollama Cloud** with `OLLAMA_API_KEY`, or a local `ollama serve` instance).
 - Full conversation history sent on every turn
 - System prompt grounds the model as a real estate assistant
 - Politely refuses off-topic questions, legal advice, and return guarantees
@@ -22,26 +37,35 @@ Form that submits a listing to the n8n pipeline and displays the triage report.
 
 ## Setup
 
-### 1. Install and start Ollama
+### 1. Configure Ollama
+
+**Ollama Cloud (recommended for Docker / EC2)**
+
+1. Create an API key at [ollama.com/settings/keys](https://ollama.com/settings/keys).
+2. Set in `.env` or `docker/secrets/webui.env` (see `docker/examples/webui.env.example`):
+
+| Variable | Example | Description |
+|----------|---------|-------------|
+| `OLLAMA_HOST` | `https://ollama.com` | Ollama API base URL |
+| `OLLAMA_API_KEY` | *(your key)* | Required for cloud |
+| `OLLAMA_MODEL` | `gpt-oss:120b` | Model id on Ollama |
+
+**Local Ollama (dev on host)**
 
 ```bash
-# Install (macOS / Linux)
 curl -fsSL https://ollama.com/install.sh | sh
-
-# Pull the model
-ollama pull mistral
-
-# Start the server (runs on port 11434 by default)
-ollama serve
+ollama pull mistral   # or another model matching OLLAMA_MODEL
+ollama serve          # default http://localhost:11434
 ```
 
-### 2. Configure environment
+Set `OLLAMA_HOST=http://localhost:11434` (or `http://host.docker.internal:11434` from Docker Desktop) and leave `OLLAMA_API_KEY` empty.
+
+### 2. Other environment
 
 ```bash
 cp .env.example .env
-# Edit .env:
-#   Set N8N_WEBHOOK_URL once your n8n flow is live (Layer 2)
-#   Leave OLLAMA_HOST as localhost for local dev
+# Edit .env — Ollama, N8N_WEBHOOK_URL, etc.
+# (Docker stack instead uses ../../docker/secrets/webui.env — see docker/examples/webui.env.example)
 ```
 
 ### 3a. Run directly (fastest for dev)
@@ -59,8 +83,7 @@ Open `http://localhost:7860`
 docker compose up --build
 ```
 
-> **Note:** Ollama must run on the **host machine**, not inside Docker.
-> The container reaches it via `host.docker.internal:11434`.
+Uses `../../docker/secrets/webui.env`. For **local** Ollama on the host, set `OLLAMA_HOST=http://host.docker.internal:11434` in that file.
 
 ---
 
@@ -83,7 +106,7 @@ The Ollama system prompt lives in `chat_client.py` → `SYSTEM_PROMPT`.
 | 9 | "What property types are popular in commercial zones?" | Helpful answer |
 | 10 | "Draft a lease agreement for me" | Declines legal drafting |
 
-Log results as Version 1 in `prompt_logs/ollama_prompt_log.md`.
+Log results in `../layer2_n8n/prompt_logs/ollama_prompt_log.md`.
 
 ---
 
@@ -91,8 +114,9 @@ Log results as Version 1 in `prompt_logs/ollama_prompt_log.md`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
-| `OLLAMA_MODEL` | `mistral` | Model to use (must be pulled first) |
+| `OLLAMA_HOST` | `https://ollama.com` | Ollama server URL |
+| `OLLAMA_API_KEY` | *(empty)* | Bearer token for Ollama Cloud |
+| `OLLAMA_MODEL` | `gpt-oss:120b` | Model name |
 | `N8N_WEBHOOK_URL` | `http://localhost:5678/webhook/property-triage` | n8n webhook endpoint |
 | `APP_TITLE` | `Property Triage Platform` | UI title |
 | `PORT` | `7860` | Gradio server port |
@@ -103,19 +127,18 @@ Log results as Version 1 in `prompt_logs/ollama_prompt_log.md`.
 ## Full system startup order
 
 ```bash
-# 1. Ollama (host machine)
-ollama serve
+# 1. Configure Ollama Cloud keys in docker/secrets/webui.env and rag.env (or run local ollama serve).
 
-# 2. Layer 3 — EC2 services (local dev)
-cd ../layer3_ec2/service_rag        && docker compose up -d
-cd ../service_image                 && docker compose up -d
-cd ../service_guardrails            && docker compose up -d
-cd ../service_langgraph             && docker compose up -d
+# 2. Layer 3 services (paths from repo root)
+cd code_base/layer3_services/service_rag        && docker compose up -d
+cd ../service_image                             && docker compose up -d
+cd ../service_guardrails                        && docker compose up -d
+cd ../service_langgraph                         && docker compose up -d
 
-# 3. n8n (Layer 2) — import flow.json and activate the webhook
+# 3. n8n — import flow.json and activate the webhook
 
-# 4. WebUI (Layer 1)
+# 4. WebUI
 cd ../../layer1_webui && docker compose up --build
 ```
 
-Open `http://localhost:7860` 🎉
+Open `http://localhost:7860`

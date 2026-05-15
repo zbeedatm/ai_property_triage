@@ -1,7 +1,7 @@
 """
 RAG Service (Pinecone) — POST /query
 Retrieves similar past property listings from Pinecone and generates
-an insight using Mistral 7B via llama-cpp-python.
+an insight via Ollama (default, cloud or local) or optional llama.cpp GGUF.
 """
 
 import os
@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Property RAG Service (Pinecone)",
-    description="Retrieves similar past listings from Pinecone and generates insights using Mistral 7B.",
+    description="Retrieves similar past listings from Pinecone and generates insights via Ollama or llama.cpp.",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -150,9 +150,16 @@ class QueryResponse(BaseModel):
 
 @app.get("/health")
 def health():
+    backend = os.getenv("RAG_LLM_BACKEND", "ollama").lower().strip()
+    if backend == "ollama":
+        model_label = os.getenv("OLLAMA_MODEL", "gpt-oss:120b")
+    else:
+        model_label = os.getenv("MODEL_PATH", "llama.cpp").split("/")[-1]
+
     out = {
         "status": "ok",
-        "model": "mistral-7b-instruct-v0.2.Q4_K_M",
+        "model": model_label,
+        "llm_backend": backend,
         "vector_store": "pinecone",
         "index_name": os.getenv("PINECONE_INDEX_NAME", "property-listings"),
     }

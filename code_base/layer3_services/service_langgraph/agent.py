@@ -39,6 +39,43 @@ from tools import analyse_images, rag_query
 logger = logging.getLogger(__name__)
 
 
+def _patch_langgraph_checkpoint_versions_seen() -> None:
+    """Fix KeyError: '__start__' in langgraph 0.1.x with checkpoint.base package.
+
+    `empty_checkpoint` / `copy_checkpoint` use a plain dict for ``versions_seen``, but
+    ``_prepare_next_tasks`` indexes every process name without ``setdefault``. The
+    older ``checkpoint/base.py`` path used ``defaultdict(dict)``. Wrap both helpers
+    on the ``pregel`` module (where they are bound) until LangGraph is upgraded.
+    """
+    from collections import defaultdict
+
+    import langgraph.pregel as _pregel
+
+    _orig_empty = _pregel.empty_checkpoint
+
+    def empty_checkpoint():  # noqa: ANN202
+        cp = _orig_empty()
+        vs = cp.get("versions_seen")
+        if type(vs) is dict and not isinstance(vs, defaultdict):
+            cp["versions_seen"] = defaultdict(dict, vs)
+        return cp
+
+    _orig_copy = _pregel.copy_checkpoint
+
+    def copy_checkpoint(checkpoint):  # noqa: ANN001, ANN202
+        cp = _orig_copy(checkpoint)
+        vs = cp.get("versions_seen")
+        if type(vs) is dict and not isinstance(vs, defaultdict):
+            cp["versions_seen"] = defaultdict(dict, vs)
+        return cp
+
+    _pregel.empty_checkpoint = empty_checkpoint
+    _pregel.copy_checkpoint = copy_checkpoint
+
+
+_patch_langgraph_checkpoint_versions_seen()
+
+
 def _parse_llm_json_blob(raw: str) -> dict | None:
     """
     Parse JSON from LLM output. Gemini often wraps JSON in ```json ... ``` fences.

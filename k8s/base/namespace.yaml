@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: property-triage
+  labels:
+    app.kubernetes.io/name: property-triage
+    app.kubernetes.io/part-of: ai-property-triage

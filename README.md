@@ -6,6 +6,8 @@ and returns a structured triage report.
 
 **Prompts registry:** consolidated system prompts and classifier instructions (WebUI, n8n `flow.json`, Guardrails, RAG, LangGraph) live in [docs/PROMPTS.md](docs/PROMPTS.md).
 
+**Kubernetes (optional):** same stack via manifests under [k8s/](k8s/) — does not replace Docker Compose; see [k8s/README.md](k8s/README.md).
+
 ---
 
 ## Architecture

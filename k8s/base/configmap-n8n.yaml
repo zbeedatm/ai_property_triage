@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-config
+  labels:
+    app.kubernetes.io/name: n8n
+data:
+  N8N_BASIC_AUTH_ACTIVE: "true"
+  N8N_BASIC_AUTH_USER: "admin"
+  # Override via Secret n8n-env in production (see k8s/scripts/create-secrets.*)
+  N8N_BASIC_AUTH_PASSWORD: "changeme"
+  N8N_HOST: "localhost"
+  N8N_PORT: "5678"
+  N8N_PROTOCOL: "http"
+  N8N_SECURE_COOKIE: "false"
+  WEBHOOK_URL: "http://localhost:5678"
+  N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+  RAG_URL: "http://rag:8000"
+  IMAGE_URL: "http://image-analyser:8000"
+  GUARDRAILS_URL: "http://guardrails:8000"
+  LANGGRAPH_URL: "http://langgraph-agent:8000"
+  HUMAN_REVIEW_WEBHOOK_URL: "http://human-review:9090/review"
+  EXECUTIONS_DATA_SAVE_ON_ERROR: "all"
+  EXECUTIONS_DATA_SAVE_ON_SUCCESS: "all"
+  EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: "true"
+  N8N_LOG_LEVEL: "info"

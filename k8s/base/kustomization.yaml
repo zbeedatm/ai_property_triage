@@ -1,0 +1,22 @@
+# Base manifests — apply via overlay (e.g. kubectl apply -k k8s/overlays/default)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: property-triage
+
+resources:
+  - namespace.yaml
+  - configmap-n8n.yaml
+  - pvc-n8n.yaml
+  - deployment-n8n.yaml
+  - service-n8n.yaml
+  - deployment-webui.yaml
+  - service-webui.yaml
+  - deployment-guardrails.yaml
+  - service-guardrails.yaml
+  - deployment-rag.yaml
+  - service-rag.yaml
+  - deployment-image-analyser.yaml
+  - service-image-analyser.yaml
+  - deployment-langgraph-agent.yaml
+  - service-langgraph-agent.yaml

@@ -1,5 +1,5 @@
 # Create Kubernetes Secrets from docker/secrets/*.env (same files as Docker Compose).
-# Run from repository root: pwsh k8s/scripts/create-secrets.ps1
+# Run from repository root: powershell -File k8s/scripts/create-secrets.ps1
 
 $ErrorActionPreference = "Stop"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "../..")
@@ -43,7 +43,7 @@ $n8nEnv = Join-Path $SecretsDir "n8n.env"
 if (Test-Path $n8nEnv) {
     Apply-EnvSecret "n8n-env" $n8nEnv
 } else {
-    Write-Host "Optional: create docker/secrets/n8n.env with N8N_BASIC_AUTH_PASSWORD to override ConfigMap default."
+    Write-Host "Optional: create docker/secrets/n8n.env with N8N_BASIC_AUTH_PASSWORD to override chart values."
 }
 
 Write-Host "Done. Secrets are in namespace: $Ns"

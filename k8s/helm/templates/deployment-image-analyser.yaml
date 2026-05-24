@@ -1,8 +1,11 @@
+{{- if .Values.imageAnalyser.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: image-analyser
+  namespace: {{ include "property-triage.namespace" . }}
   labels:
+    {{- include "property-triage.labels" . | nindent 4 }}
     app.kubernetes.io/name: image-analyser
 spec:
   replicas: 1
@@ -16,14 +19,14 @@ spec:
     spec:
       containers:
         - name: image-analyser
-          image: zbeedatm/property-triage-image_analyser:latest
-          imagePullPolicy: IfNotPresent
+          image: {{ include "property-triage.image" .Values.images.imageAnalyser }}
+          imagePullPolicy: {{ .Values.images.imageAnalyser.pullPolicy }}
           ports:
             - name: http
-              containerPort: 8000
+              containerPort: {{ .Values.imageAnalyser.port }}
           envFrom:
             - secretRef:
-                name: image-env
+                name: {{ .Values.imageAnalyser.secretName }}
           readinessProbe:
             httpGet:
               path: /health
@@ -37,9 +40,5 @@ spec:
             initialDelaySeconds: 40
             periodSeconds: 20
           resources:
-            requests:
-              memory: "1Gi"
-              cpu: "500m"
-            limits:
-              memory: "4Gi"
-              cpu: "4000m"
+            {{- toYaml .Values.imageAnalyser.resources | nindent 12 }}
+{{- end }}

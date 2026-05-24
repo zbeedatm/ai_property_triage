@@ -1,0 +1,19 @@
+{{- if and .Values.n8n.enabled .Values.n8n.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: n8n-data
+  namespace: {{ include "property-triage.namespace" . }}
+  labels:
+    {{- include "property-triage.labels" . | nindent 4 }}
+    app.kubernetes.io/name: n8n
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.n8n.persistence.size }}
+  {{- with .Values.n8n.persistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}

@@ -1,19 +1,20 @@
-# Optional — requires an Ingress controller (nginx, ALB, Traefik, …).
-# Apply manually: kubectl apply -f k8s/base/ingress.yaml -n property-triage
-# Edit hostnames and TLS before production use.
+{{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: property-triage
+  namespace: {{ include "property-triage.namespace" . }}
   labels:
+    {{- include "property-triage.labels" . | nindent 4 }}
     app.kubernetes.io/name: property-triage
+  {{- with .Values.ingress.annotations }}
   annotations:
-    # nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-    # nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
-  ingressClassName: nginx
+  ingressClassName: {{ .Values.ingress.className }}
   rules:
-    - host: property-triage.local
+    - host: {{ .Values.ingress.hosts.webui }}
       http:
         paths:
           - path: /
@@ -22,8 +23,8 @@ spec:
               service:
                 name: webui
                 port:
-                  number: 7860
-    - host: n8n.property-triage.local
+                  number: {{ .Values.webui.port }}
+    - host: {{ .Values.ingress.hosts.n8n }}
       http:
         paths:
           - path: /
@@ -33,3 +34,4 @@ spec:
                 name: n8n
                 port:
                   number: 5678
+{{- end }}

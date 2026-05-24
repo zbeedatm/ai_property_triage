@@ -1,8 +1,11 @@
+{{- if .Values.rag.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: rag
+  namespace: {{ include "property-triage.namespace" . }}
   labels:
+    {{- include "property-triage.labels" . | nindent 4 }}
     app.kubernetes.io/name: rag
 spec:
   replicas: 1
@@ -16,14 +19,14 @@ spec:
     spec:
       containers:
         - name: rag
-          image: zbeedatm/property-triage-rag:latest
-          imagePullPolicy: IfNotPresent
+          image: {{ include "property-triage.image" .Values.images.rag }}
+          imagePullPolicy: {{ .Values.images.rag.pullPolicy }}
           ports:
             - name: http
-              containerPort: 8000
+              containerPort: {{ .Values.rag.port }}
           envFrom:
             - secretRef:
-                name: rag-env
+                name: {{ .Values.rag.secretName }}
           readinessProbe:
             httpGet:
               path: /health
@@ -37,9 +40,5 @@ spec:
             initialDelaySeconds: 60
             periodSeconds: 30
           resources:
-            requests:
-              memory: "1Gi"
-              cpu: "500m"
-            limits:
-              memory: "4Gi"
-              cpu: "4000m"
+            {{- toYaml .Values.rag.resources | nindent 12 }}
+{{- end }}

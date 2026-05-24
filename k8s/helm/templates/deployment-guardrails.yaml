@@ -1,8 +1,11 @@
+{{- if .Values.guardrails.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: guardrails
+  namespace: {{ include "property-triage.namespace" . }}
   labels:
+    {{- include "property-triage.labels" . | nindent 4 }}
     app.kubernetes.io/name: guardrails
 spec:
   replicas: 1
@@ -16,14 +19,14 @@ spec:
     spec:
       containers:
         - name: guardrails
-          image: zbeedatm/property-triage-guardrails:latest
-          imagePullPolicy: IfNotPresent
+          image: {{ include "property-triage.image" .Values.images.guardrails }}
+          imagePullPolicy: {{ .Values.images.guardrails.pullPolicy }}
           ports:
             - name: http
-              containerPort: 8000
+              containerPort: {{ .Values.guardrails.port }}
           envFrom:
             - secretRef:
-                name: guardrails-env
+                name: {{ .Values.guardrails.secretName }}
           readinessProbe:
             httpGet:
               path: /health
@@ -37,9 +40,5 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 20
           resources:
-            requests:
-              memory: "512Mi"
-              cpu: "250m"
-            limits:
-              memory: "2Gi"
-              cpu: "2000m"
+            {{- toYaml .Values.guardrails.resources | nindent 12 }}
+{{- end }}

@@ -1,110 +1,118 @@
-# Kubernetes deployment (optional)
+# Kubernetes (Helm)
 
-This directory adds **Kubernetes** manifests for the same stack as `docker-compose.yml` / `docker-compose.ec2.yml`.  
-**Docker Compose is unchanged** — use Compose for local dev and single-host EC2; use K8s when you have a cluster.
+Deploy the same stack as `docker-compose.yml` / `docker-compose.ec2.yml` with **Helm only**.  
+Docker Compose is unchanged — use Compose for local dev and single-host EC2.
+
+## Layout
+
+```
+k8s/
+  helm/                 # Helm chart (Chart.yaml, values.yaml, templates/)
+  scripts/
+    create-secrets.*    # docker/secrets → K8s Secrets + n8n-flow ConfigMap
+    validate-helm.*     # helm lint + template (CI / local check)
+```
 
 ## Prerequisites
 
-- A Kubernetes cluster (EKS, GKE, AKS, minikube, kind, k3s, …)
-- `kubectl` and `kustomize` (built into `kubectl apply -k`)
+- Kubernetes cluster and `kubectl`
+- [Helm](https://helm.sh/) 3.x
 - Images on a registry (default: `zbeedatm/property-triage-*:latest`, same as `docker-compose.ec2.yml`)
-- Secrets created from `docker/secrets/*.env` (see below)
+- `docker/secrets/*.env` populated from `docker/examples/`
 
 ## Quick start
 
 From the **repository root**:
 
 ```bash
-# 1. Apply Deployments, Services, PVC, n8n ConfigMap (static env)
-kubectl apply -k k8s/overlays/default
+# 1. Secrets + flow.json ConfigMap (required before pods become healthy)
+./k8s/scripts/create-secrets.sh
+# Windows: powershell -File k8s/scripts/create-secrets.ps1
 
-# 2. Create Secrets + n8n-flow ConfigMap from docker/secrets/ and code_base/layer2_n8n/flow.json
-./k8s/scripts/create-secrets.sh          # Linux/macOS
-# or
-pwsh k8s/scripts/create-secrets.ps1      # Windows
+# 2. Install or upgrade
+helm upgrade --install property-triage ./k8s/helm \
+  --namespace property-triage \
+  --create-namespace
 
-# 3. Restart pods if they were waiting for secrets / flow ConfigMap
+# 3. Restart if pods started before secrets existed
 kubectl rollout restart deployment -n property-triage --all
 ```
 
-## Layout
-
-```
-k8s/
-  base/                 # Shared manifests (Deployments, Services, PVC, n8n init)
-  overlays/
-    default/            # Docker Hub images (zbeedatm/...)
-    local-images/       # Use images built via docker compose (imagePullPolicy: IfNotPresent)
-  scripts/              # Helper to sync docker/secrets → K8s Secrets
-```
-
-## Services and ports (in-cluster)
-
-| Service          | DNS name (namespace)     | Port |
-|------------------|--------------------------|------|
-| n8n              | `n8n.property-triage`    | 5678 |
-| webui            | `webui`                  | 7860 |
-| guardrails       | `guardrails`             | 8000 |
-| rag              | `rag`                    | 8000 |
-| image_analyser   | `image-analyser`         | 8000 |
-| langgraph_agent  | `langgraph-agent`        | 8000 |
-
-n8n env vars use the same internal URLs as Compose: `http://rag:8000`, etc.
-
-## Secrets
-
-Kubernetes expects Secrets named:
-
-- `webui-env`, `guardrails-env`, `rag-env`, `image-env`, `langgraph-env`
-- `n8n-env` (optional; only `N8N_BASIC_AUTH_PASSWORD` — other n8n settings are in ConfigMap)
-
-Create them from `docker/secrets/` with the provided scripts, or manually:
+**Local images** (after `docker compose build`):
 
 ```bash
-kubectl create secret generic webui-env \
-  --from-env-file=docker/secrets/webui.env \
-  -n property-triage --dry-run=client -o yaml | kubectl apply -f -
+helm upgrade --install property-triage ./k8s/helm \
+  --namespace property-triage \
+  -f k8s/helm/values-local.yaml
 ```
 
-Ensure `webui.env` uses in-cluster URLs, e.g. `N8N_WEBHOOK_URL=http://n8n:5678/webhook/property-triage` (see `docker/examples/webui.env.example`).
-
-## Ingress (optional)
-
-Apply after installing an Ingress controller (nginx, Traefik, AWS Load Balancer Controller):
+**Validate chart** (no cluster required):
 
 ```bash
-kubectl apply -f k8s/base/ingress.yaml
+./k8s/scripts/validate-helm.sh
 ```
 
-Edit hostnames in `ingress.yaml` before use. Set n8n `WEBHOOK_URL` / `N8N_HOST` to match your public URL.
+## Configuration
 
-## Local images (built with Compose)
+| File | Purpose |
+|------|---------|
+| `helm/values.yaml` | Default images (`zbeedatm/*`), n8n ConfigMap, resources |
+| `helm/values-local.yaml` | `ai_property_triage-*` images from Compose build |
+| `helm/templates/` | Deployments, Services, PVC, optional Ingress |
 
-After `docker compose build`:
+Override at install time, e.g.:
 
 ```bash
-kubectl apply -k k8s/overlays/local-images
+helm upgrade --install property-triage ./k8s/helm \
+  --namespace property-triage \
+  --set ingress.enabled=true \
+  --set ingress.hosts.webui=app.example.com \
+  --set n8n.config.webhookUrl=https://n8n.example.com
 ```
 
-This overlay retags Deployments to `ai_property_triage-*:latest` (Compose project name) and sets `imagePullPolicy: IfNotPresent` for kind/minikube.
+## Secrets (not in the chart)
 
-## n8n
+| Secret / ConfigMap | Source |
+|--------------------|--------|
+| `webui-env` | `docker/secrets/webui.env` |
+| `guardrails-env` | `docker/secrets/guardrails.env` |
+| `rag-env` | `docker/secrets/rag.env` |
+| `image-env` | `docker/secrets/image.env` |
+| `langgraph-env` | `docker/secrets/langgraph.env` |
+| `n8n-env` | optional — `docker/secrets/n8n.env` |
+| `n8n-flow` | `code_base/layer2_n8n/flow.json` |
 
-- **PVC** `n8n-data` persists workflow DB and credentials.
-- **Init container** imports `flow.json` once (same logic as Compose entrypoint).
-- Configure **Google Gemini** credentials in the n8n UI after first deploy.
+Use in-cluster URLs in `webui.env`, e.g. `N8N_WEBHOOK_URL=http://n8n:5678/webhook/property-triage` (see `docker/examples/webui.env.example`).
 
-## Access without Ingress (port-forward)
+## In-cluster services
+
+| Service | DNS | Port |
+|---------|-----|------|
+| n8n | `n8n` | 5678 |
+| webui | `webui` | 7860 |
+| guardrails | `guardrails` | 8000 |
+| rag | `rag` | 8000 |
+| image analyser | `image-analyser` | 8000 |
+| langgraph | `langgraph-agent` | 8000 |
+
+## Access (port-forward)
 
 ```bash
 kubectl port-forward svc/webui 7860:7860 -n property-triage
 kubectl port-forward svc/n8n 5678:5678 -n property-triage
 ```
 
+Or enable Ingress: `--set ingress.enabled=true` (requires an Ingress controller).
+
+## n8n
+
+- PVC `n8n-data` persists workflow data.
+- Init container imports `flow.json` once (same as Compose).
+- Add **Google Gemini** credentials in the n8n UI after first deploy.
+
 ## Uninstall
 
 ```bash
-kubectl delete -k k8s/overlays/default
-# PVC is retained unless you delete it:
-kubectl delete pvc n8n-data -n property-triage
+helm uninstall property-triage -n property-triage
+kubectl delete pvc n8n-data -n property-triage   # optional — retains data if omitted
 ```

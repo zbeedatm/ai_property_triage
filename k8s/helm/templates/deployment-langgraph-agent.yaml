@@ -1,8 +1,11 @@
+{{- if .Values.langgraphAgent.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: langgraph-agent
+  namespace: {{ include "property-triage.namespace" . }}
   labels:
+    {{- include "property-triage.labels" . | nindent 4 }}
     app.kubernetes.io/name: langgraph-agent
 spec:
   replicas: 1
@@ -16,14 +19,14 @@ spec:
     spec:
       containers:
         - name: langgraph-agent
-          image: zbeedatm/property-triage-langgraph_agent:latest
-          imagePullPolicy: IfNotPresent
+          image: {{ include "property-triage.image" .Values.images.langgraphAgent }}
+          imagePullPolicy: {{ .Values.images.langgraphAgent.pullPolicy }}
           ports:
             - name: http
-              containerPort: 8000
+              containerPort: {{ .Values.langgraphAgent.port }}
           envFrom:
             - secretRef:
-                name: langgraph-env
+                name: {{ .Values.langgraphAgent.secretName }}
           readinessProbe:
             httpGet:
               path: /health
@@ -37,9 +40,5 @@ spec:
             initialDelaySeconds: 40
             periodSeconds: 20
           resources:
-            requests:
-              memory: "512Mi"
-              cpu: "250m"
-            limits:
-              memory: "2Gi"
-              cpu: "2000m"
+            {{- toYaml .Values.langgraphAgent.resources | nindent 12 }}
+{{- end }}

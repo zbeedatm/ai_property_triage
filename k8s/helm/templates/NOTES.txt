@@ -1,0 +1,15 @@
+AI Property Triage deployed to namespace {{ .Values.namespace }}.
+
+1. Create Secrets + n8n-flow ConfigMap (if not done yet):
+   ./k8s/scripts/create-secrets.sh
+
+2. Restart workloads if pods started before secrets:
+   kubectl rollout restart deployment -n {{ .Values.namespace }} --all
+
+3. Port-forward:
+   kubectl port-forward svc/webui {{ .Values.webui.port }}:{{ .Values.webui.port }} -n {{ .Values.namespace }}
+   kubectl port-forward svc/n8n 5678:5678 -n {{ .Values.namespace }}
+
+4. Configure Gemini credentials in the n8n UI after first login.
+
+See k8s/README.md for details.

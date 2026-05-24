@@ -1,0 +1,22 @@
+# Images from: docker compose build (project AI_Property_Triage)
+images:
+  webui:
+    repository: ai_property_triage-webui
+    tag: latest
+    pullPolicy: IfNotPresent
+  guardrails:
+    repository: ai_property_triage-guardrails
+    tag: latest
+    pullPolicy: IfNotPresent
+  rag:
+    repository: ai_property_triage-rag
+    tag: latest
+    pullPolicy: IfNotPresent
+  imageAnalyser:
+    repository: ai_property_triage-image_analyser
+    tag: latest
+    pullPolicy: IfNotPresent
+  langgraphAgent:
+    repository: ai_property_triage-langgraph_agent
+    tag: latest
+    pullPolicy: IfNotPresent

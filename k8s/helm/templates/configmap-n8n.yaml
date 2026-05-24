@@ -1,0 +1,29 @@
+{{- if .Values.n8n.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-config
+  namespace: {{ include "property-triage.namespace" . }}
+  labels:
+    {{- include "property-triage.labels" . | nindent 4 }}
+    app.kubernetes.io/name: n8n
+data:
+  N8N_BASIC_AUTH_ACTIVE: {{ .Values.n8n.config.basicAuthActive | quote }}
+  N8N_BASIC_AUTH_USER: {{ .Values.n8n.config.basicAuthUser | quote }}
+  N8N_BASIC_AUTH_PASSWORD: {{ .Values.n8n.config.basicAuthPassword | quote }}
+  N8N_HOST: {{ .Values.n8n.config.host | quote }}
+  N8N_PORT: {{ .Values.n8n.config.port | quote }}
+  N8N_PROTOCOL: {{ .Values.n8n.config.protocol | quote }}
+  N8N_SECURE_COOKIE: {{ .Values.n8n.config.secureCookie | quote }}
+  WEBHOOK_URL: {{ .Values.n8n.config.webhookUrl | quote }}
+  N8N_BLOCK_ENV_ACCESS_IN_NODE: {{ .Values.n8n.config.blockEnvAccessInNode | quote }}
+  RAG_URL: {{ .Values.n8n.serviceUrls.rag | quote }}
+  IMAGE_URL: {{ .Values.n8n.serviceUrls.image | quote }}
+  GUARDRAILS_URL: {{ .Values.n8n.serviceUrls.guardrails | quote }}
+  LANGGRAPH_URL: {{ .Values.n8n.serviceUrls.langgraph | quote }}
+  HUMAN_REVIEW_WEBHOOK_URL: {{ .Values.n8n.config.humanReviewWebhookUrl | quote }}
+  EXECUTIONS_DATA_SAVE_ON_ERROR: {{ .Values.n8n.config.executionsSaveOnError | quote }}
+  EXECUTIONS_DATA_SAVE_ON_SUCCESS: {{ .Values.n8n.config.executionsSaveOnSuccess | quote }}
+  EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: {{ .Values.n8n.config.executionsSaveManual | quote }}
+  N8N_LOG_LEVEL: {{ .Values.n8n.config.logLevel | quote }}
+{{- end }}

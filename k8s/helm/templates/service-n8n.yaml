@@ -1,8 +1,11 @@
+{{- if .Values.n8n.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
   name: n8n
+  namespace: {{ include "property-triage.namespace" . }}
   labels:
+    {{- include "property-triage.labels" . | nindent 4 }}
     app.kubernetes.io/name: n8n
 spec:
   type: ClusterIP
@@ -12,3 +15,4 @@ spec:
     - name: http
       port: 5678
       targetPort: http
+{{- end }}

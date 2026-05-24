@@ -1,6 +1,0 @@
-# Production-style overlay: Docker Hub images (same as docker-compose.ec2.yml)
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - ../../base

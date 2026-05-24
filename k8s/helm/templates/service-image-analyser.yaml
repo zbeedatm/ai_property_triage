@@ -1,8 +1,11 @@
+{{- if .Values.imageAnalyser.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
   name: image-analyser
+  namespace: {{ include "property-triage.namespace" . }}
   labels:
+    {{- include "property-triage.labels" . | nindent 4 }}
     app.kubernetes.io/name: image-analyser
 spec:
   type: ClusterIP
@@ -10,5 +13,6 @@ spec:
     app.kubernetes.io/name: image-analyser
   ports:
     - name: http
-      port: 8000
+      port: {{ .Values.imageAnalyser.port }}
       targetPort: http
+{{- end }}

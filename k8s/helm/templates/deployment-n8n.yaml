@@ -1,8 +1,11 @@
+{{- if .Values.n8n.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: n8n
+  namespace: {{ include "property-triage.namespace" . }}
   labels:
+    {{- include "property-triage.labels" . | nindent 4 }}
     app.kubernetes.io/name: n8n
 spec:
   replicas: 1
@@ -18,8 +21,8 @@ spec:
     spec:
       initContainers:
         - name: import-workflow
-          image: n8nio/n8n:latest
-          imagePullPolicy: IfNotPresent
+          image: {{ include "property-triage.image" .Values.n8n.image }}
+          imagePullPolicy: {{ .Values.n8n.image.pullPolicy }}
           command:
             - /bin/sh
             - -c
@@ -27,7 +30,7 @@ spec:
               set -e
               if [ ! -f /home/node/.n8n/.workflow_imported ]; then
                 n8n import:workflow --input=/workflow/flow.json
-                n8n update:workflow --id=KTmqpo6jEYzPBoKR --active=true 2>/dev/null || true
+                n8n update:workflow --id={{ .Values.n8n.workflow.workflowId | quote }} --active=true 2>/dev/null || true
                 touch /home/node/.n8n/.workflow_imported
               fi
           volumeMounts:
@@ -38,34 +41,36 @@ spec:
               readOnly: true
       containers:
         - name: n8n
-          image: n8nio/n8n:latest
-          imagePullPolicy: IfNotPresent
+          image: {{ include "property-triage.image" .Values.n8n.image }}
+          imagePullPolicy: {{ .Values.n8n.image.pullPolicy }}
           ports:
             - name: http
               containerPort: 5678
           envFrom:
             - configMapRef:
                 name: n8n-config
+            {{- if .Values.n8n.existingSecret }}
             - secretRef:
-                name: n8n-env
+                name: {{ .Values.n8n.existingSecret }}
                 optional: true
+            {{- end }}
           volumeMounts:
             - name: n8n-data
               mountPath: /home/node/.n8n
           resources:
-            requests:
-              memory: "512Mi"
-              cpu: "250m"
-            limits:
-              memory: "2Gi"
-              cpu: "2000m"
+            {{- toYaml .Values.n8n.resources | nindent 12 }}
       volumes:
         - name: n8n-data
+          {{- if .Values.n8n.persistence.enabled }}
           persistentVolumeClaim:
             claimName: n8n-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
         - name: flow-json
           configMap:
-            name: n8n-flow
+            name: {{ .Values.n8n.workflow.configMapName }}
             items:
               - key: flow.json
                 path: flow.json
+{{- end }}

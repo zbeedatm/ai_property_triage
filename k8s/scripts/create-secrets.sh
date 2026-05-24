@@ -44,7 +44,7 @@ apply_env_secret "langgraph-env" "${SECRETS_DIR}/langgraph.env"
 if [[ -f "${SECRETS_DIR}/n8n.env" ]]; then
   apply_env_secret "n8n-env" "${SECRETS_DIR}/n8n.env"
 else
-  echo "Optional: create ${SECRETS_DIR}/n8n.env with N8N_BASIC_AUTH_PASSWORD to override ConfigMap default."
+  echo "Optional: create ${SECRETS_DIR}/n8n.env with N8N_BASIC_AUTH_PASSWORD to override chart values."
 fi
 
 echo "Done. Secrets are in namespace: $NS"

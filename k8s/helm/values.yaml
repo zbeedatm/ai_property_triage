@@ -1,0 +1,135 @@
+# Defaults aligned with docker-compose.ec2.yml. Secrets via k8s/scripts/create-secrets.*
+
+namespace: property-triage
+
+images:
+  webui:
+    repository: zbeedatm/property-triage-webui
+    tag: latest
+    pullPolicy: IfNotPresent
+  guardrails:
+    repository: zbeedatm/property-triage-guardrails
+    tag: latest
+    pullPolicy: IfNotPresent
+  rag:
+    repository: zbeedatm/property-triage-rag
+    tag: latest
+    pullPolicy: IfNotPresent
+  imageAnalyser:
+    repository: zbeedatm/property-triage-image_analyser
+    tag: latest
+    pullPolicy: IfNotPresent
+  langgraphAgent:
+    repository: zbeedatm/property-triage-langgraph_agent
+    tag: latest
+    pullPolicy: IfNotPresent
+
+n8n:
+  enabled: true
+  image:
+    repository: n8nio/n8n
+    tag: latest
+    pullPolicy: IfNotPresent
+  workflow:
+    configMapName: n8n-flow
+    workflowId: KTmqpo6jEYzPBoKR
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClassName: ""
+  config:
+    basicAuthActive: "true"
+    basicAuthUser: admin
+    basicAuthPassword: changeme
+    host: localhost
+    port: "5678"
+    protocol: http
+    secureCookie: "false"
+    webhookUrl: http://localhost:5678
+    blockEnvAccessInNode: "false"
+    humanReviewWebhookUrl: http://human-review:9090/review
+    executionsSaveOnError: all
+    executionsSaveOnSuccess: all
+    executionsSaveManual: "true"
+    logLevel: info
+  serviceUrls:
+    rag: http://rag:8000
+    image: http://image-analyser:8000
+    guardrails: http://guardrails:8000
+    langgraph: http://langgraph-agent:8000
+  existingSecret: n8n-env
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 2Gi
+      cpu: 2000m
+
+webui:
+  enabled: true
+  secretName: webui-env
+  port: 7860
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 2Gi
+      cpu: 2000m
+
+guardrails:
+  enabled: true
+  secretName: guardrails-env
+  port: 8000
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 2Gi
+      cpu: 2000m
+
+rag:
+  enabled: true
+  secretName: rag-env
+  port: 8000
+  resources:
+    requests:
+      memory: 1Gi
+      cpu: 500m
+    limits:
+      memory: 4Gi
+      cpu: 4000m
+
+imageAnalyser:
+  enabled: true
+  secretName: image-env
+  port: 8000
+  resources:
+    requests:
+      memory: 1Gi
+      cpu: 500m
+    limits:
+      memory: 4Gi
+      cpu: 4000m
+
+langgraphAgent:
+  enabled: true
+  secretName: langgraph-env
+  port: 8000
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 2Gi
+      cpu: 2000m
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    webui: property-triage.local
+    n8n: n8n.property-triage.local
